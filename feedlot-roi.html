@@ -35,8 +35,9 @@
   .hero { background: linear-gradient(135deg, var(--brand-accent) 0%, var(--brand-primary) 100%); color: #fff; padding: 32px 24px 40px; }
   .hero-inner { max-width: 1280px; margin: 0 auto; }
   .brand-bar { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
-  .logo { font-size: 26px; font-weight: 800; letter-spacing: 1px; }
+  .logo { font-size: 26px; font-weight: 800; letter-spacing: 1px; display: flex; align-items: center; }
   .logo .reg { font-size: 14px; vertical-align: super; }
+  .logo img { height: 44px; width: auto; display: block; }
   .tagline { font-size: 14px; opacity: 0.85; padding-left: 16px; border-left: 2px solid rgba(255,255,255,0.3); }
   .hero h1 { font-size: 28px; font-weight: 600; margin-bottom: 8px; max-width: 800px; }
   .hero .subtitle { font-size: 16px; opacity: 0.9; max-width: 700px; }
@@ -106,7 +107,6 @@
   .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
   .modal-error { color: var(--negative); font-size: 12px; margin-top: 8px; display: none; }
 
-  /* PDF-specific */
   .pdf-only { display: none; }
   @media print {
     body { background: #fff; }
@@ -118,7 +118,7 @@
   <header class="hero">
     <div class="hero-inner">
       <div class="brand-bar">
-        <div class="logo" id="logo-text">RIDGEBACK<span class="reg">®</span></div>
+        <div class="logo" id="logo-text"><img src="ridgeback-logo.png" alt="Ridgeback by Entegra"></div>
         <div class="tagline" id="tagline-text">Covered Pen Feedlot ROI Calculator</div>
       </div>
       <h1 id="hero-title">Calculate the upside of switching to Ridgeback covered pens</h1>
@@ -207,21 +207,14 @@
   </div>
 
 <script>
-/* ============================================================
-   CONFIG — change these per calculator. Engine code below stays the same.
-   ============================================================ */
 const CONFIG = {
   brand: new URLSearchParams(location.search).get('brand') === 'ridgeback' ? 'ridgeback' : 'generic',
-  webhookUrl: 'https://default4198dfe9b47a4176a64f5660e8a06b.a6.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/5fe0da60f109453f992a1ddd0cfa433f/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=a0Zr1kVwsfULVFTzMrLeef69joWOSPs8RADNsEZHEH4'
+  webhookUrl: 'https://default4198dfe9b47a4176a64f5660e8a06b.a6.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/5fe0da60f109453f992a1ddd0cfa433f/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=a0Zr1kVwsfULVFTzMrLeef69joWOSPs8RADNsEZHEH4',
   pdfFilename: 'ROI-Calculator-Report.pdf',
   capexLowPerM2: 160,
   capexHighPerM2: 190,
 };
 
-/* ============================================================
-   INPUTS — mirrors the Inputs sheet of the .xltx, grouped by category
-   key = variable name used in formulas
-   ============================================================ */
 const INPUT_CATEGORIES = [
   { name: 'Site & Specification', fields: [
     { key: 'scu', label: 'Total SCU (Standard Cattle Units)', info: 'Head on feed at any given time', units: 'SCU', default: 1500 },
@@ -290,125 +283,35 @@ const INPUT_CATEGORIES = [
   ]},
 ];
 
-/* ============================================================
-   FORMULAS — each returns { trad, ridge, diff } in $/year
-   diff is sign-corrected so positive = upside for Ridgeback
-   ============================================================ */
 function computeAll(v) {
   const out = {};
-  // 1. Mortality (cost saving: trad - ridge)
-  {
-    const trad = v.heat_events * (v.mort_trad / 1000) * v.scu * v.value_scu;
-    const ridge = v.heat_events * (v.mort_ridge / 1000) * v.scu * v.value_scu;
-    out.mortality = { label: 'Mortality', trad, ridge, diff: trad - ridge };
-  }
-  // 2. Morbidity (cost saving)
-  {
-    const adgLossTotal = v.sick_days * v.daily_adg_loss * v.live_weight_price;
-    const treatmentCost = v.vet_cost + v.med_cost + adgLossTotal;
-    const trad = v.cycles * (v.morb_trad / 100) * v.scu * treatmentCost;
-    const ridge = v.cycles * (v.morb_ridge / 100) * v.scu * treatmentCost;
-    out.morbidity = { label: 'Morbidity', trad, ridge, diff: trad - ridge };
-  }
-  // 3. Dag Loading (cost saving)
-  {
-    const trad = v.cycles * (v.dag_trad / 100) * v.scu * v.dag_penalty;
-    const ridge = v.cycles * (v.dag_ridge / 100) * v.scu * v.dag_penalty;
-    out.dag = { label: 'Dag Loading', trad, ridge, diff: trad - ridge };
-  }
-  // 4. Feed Wastage (cost saving)
-  {
-    const tonnes = v.feed_per_day * v.scu / 1000;
-    const trad = v.rain_days * (v.wastage_trad / 100) * tonnes * v.feed_cost;
-    const ridge = v.rain_days * (v.wastage_ridge / 100) * tonnes * v.feed_cost;
-    out.feed_wastage = { label: 'Feed Wastage', trad, ridge, diff: trad - ridge };
-  }
-  // 5. ADG (income gain: ridge - trad)
-  {
-    const trad = v.cycles * v.scu * v.days_on_feed * v.adg_trad * v.live_weight_price;
-    const ridge = v.cycles * v.scu * v.days_on_feed * v.adg_ridge * v.live_weight_price;
-    out.adg = { label: 'ADG (extra weight gain)', trad, ridge, diff: ridge - trad };
-  }
-  // 6. Carcass Quality (income gain)
-  {
-    const trad = 0;
-    const ridge = v.cycles * v.scu * v.days_on_feed * v.adg_ridge * v.delta_quality;
-    out.quality = { label: 'Carcass Quality', trad, ridge, diff: ridge - trad };
-  }
-  // 7. Consistency (cost saving — heat-event ADG loss avoided)
-  {
-    const trad = v.heat_events * v.days_affected_heat * v.scu * v.adg_reduction_heat * v.live_weight_price;
-    const ridge = 0;
-    out.consistency = { label: 'Consistency (heat ADG)', trad, ridge, diff: trad - ridge };
-  }
-  // 8. Staff Productivity (cost saving)
-  {
-    const trad = (v.scu / 1000) * v.staff_per_1000_trad * v.salary;
-    const ridge = (v.scu / 1000) * v.staff_per_1000_ridge * v.salary;
-    out.staff = { label: 'Staff Productivity', trad, ridge, diff: trad - ridge };
-  }
-  // 9. Pen Cleaning (cost saving)
-  {
-    const trad = v.scu * v.density_trad * v.cleaning_cost_m2 * v.cleans_trad;
-    const ridge = v.scu * v.density_ridge * v.cleaning_cost_m2 * v.cleans_ridge;
-    out.cleaning = { label: 'Pen Cleaning', trad, ridge, diff: trad - ridge };
-  }
-  // 10. Bedding (cost — usually negative for Ridge since bedding is higher)
-  {
-    const trad = v.scu * v.bedding_trad;
-    const ridge = v.scu * v.bedding_ridge;
-    out.bedding = { label: 'Bedding System', trad, ridge, diff: trad - ridge };
-  }
-  // 11. Manure (income)
-  {
-    const trad = v.scu * v.manure_trad;
-    const ridge = v.scu * v.manure_ridge;
-    out.manure = { label: 'Manure Fertiliser', trad, ridge, diff: ridge - trad };
-  }
-  // 12. Water Usage (cost saving)
-  {
-    const tradML = (v.scu * v.water_consumption * 365) / 1000000;
-    const ridgeML = tradML * (1 - v.water_reduction);
-    const trad = tradML * v.water_cost;
-    const ridge = ridgeML * v.water_cost;
-    out.water_usage = { label: 'Water Consumption', trad, ridge, diff: trad - ridge };
-  }
-  // 13. Water Access (income — harvested rainfall)
-  {
-    const roofM2 = v.scu * v.density_ridge;
-    const harvestML = (roofM2 / 1000000) * v.rainfall;
-    const ridge = harvestML * v.water_cost;
-    out.water_access = { label: 'Water Harvest', trad: 0, ridge, diff: ridge - 0 };
-  }
-  // Total
+  out.mortality = (() => { const trad = v.heat_events*(v.mort_trad/1000)*v.scu*v.value_scu; const ridge = v.heat_events*(v.mort_ridge/1000)*v.scu*v.value_scu; return { label:'Mortality', trad, ridge, diff: trad-ridge }; })();
+  out.morbidity = (() => { const adgL = v.sick_days*v.daily_adg_loss*v.live_weight_price; const t = v.vet_cost+v.med_cost+adgL; const trad = v.cycles*(v.morb_trad/100)*v.scu*t; const ridge = v.cycles*(v.morb_ridge/100)*v.scu*t; return { label:'Morbidity', trad, ridge, diff: trad-ridge }; })();
+  out.dag = (() => { const trad = v.cycles*(v.dag_trad/100)*v.scu*v.dag_penalty; const ridge = v.cycles*(v.dag_ridge/100)*v.scu*v.dag_penalty; return { label:'Dag Loading', trad, ridge, diff: trad-ridge }; })();
+  out.feed_wastage = (() => { const ton = v.feed_per_day*v.scu/1000; const trad = v.rain_days*(v.wastage_trad/100)*ton*v.feed_cost; const ridge = v.rain_days*(v.wastage_ridge/100)*ton*v.feed_cost; return { label:'Feed Wastage', trad, ridge, diff: trad-ridge }; })();
+  out.adg = (() => { const trad = v.cycles*v.scu*v.days_on_feed*v.adg_trad*v.live_weight_price; const ridge = v.cycles*v.scu*v.days_on_feed*v.adg_ridge*v.live_weight_price; return { label:'ADG (extra weight gain)', trad, ridge, diff: ridge-trad }; })();
+  out.quality = (() => { const ridge = v.cycles*v.scu*v.days_on_feed*v.adg_ridge*v.delta_quality; return { label:'Carcass Quality', trad:0, ridge, diff: ridge }; })();
+  out.consistency = (() => { const trad = v.heat_events*v.days_affected_heat*v.scu*v.adg_reduction_heat*v.live_weight_price; return { label:'Consistency (heat ADG)', trad, ridge:0, diff: trad }; })();
+  out.staff = (() => { const trad = (v.scu/1000)*v.staff_per_1000_trad*v.salary; const ridge = (v.scu/1000)*v.staff_per_1000_ridge*v.salary; return { label:'Staff Productivity', trad, ridge, diff: trad-ridge }; })();
+  out.cleaning = (() => { const trad = v.scu*v.density_trad*v.cleaning_cost_m2*v.cleans_trad; const ridge = v.scu*v.density_ridge*v.cleaning_cost_m2*v.cleans_ridge; return { label:'Pen Cleaning', trad, ridge, diff: trad-ridge }; })();
+  out.bedding = (() => { const trad = v.scu*v.bedding_trad; const ridge = v.scu*v.bedding_ridge; return { label:'Bedding System', trad, ridge, diff: trad-ridge }; })();
+  out.manure = (() => { const trad = v.scu*v.manure_trad; const ridge = v.scu*v.manure_ridge; return { label:'Manure Fertiliser', trad, ridge, diff: ridge-trad }; })();
+  out.water_usage = (() => { const tML = (v.scu*v.water_consumption*365)/1000000; const rML = tML*(1-v.water_reduction); const trad = tML*v.water_cost; const ridge = rML*v.water_cost; return { label:'Water Consumption', trad, ridge, diff: trad-ridge }; })();
+  out.water_access = (() => { const roof = v.scu*v.density_ridge; const hML = (roof/1000000)*v.rainfall; const ridge = hML*v.water_cost; return { label:'Water Harvest', trad:0, ridge, diff: ridge }; })();
   let totalAnnual = 0;
   for (const k in out) totalAnnual += out[k].diff;
   out.total = { label: 'Total Annual Benefit', diff: totalAnnual };
-  // Investment & yield
   const totalRoofM2 = v.scu * v.density_ridge;
-  const capexLow = totalRoofM2 * CONFIG.capexLowPerM2;
-  const capexHigh = totalRoofM2 * CONFIG.capexHighPerM2;
-  out.capex = { low: capexLow, high: capexHigh };
-  out.payback = {
-    low: totalAnnual > 0 ? capexLow / totalAnnual : null,
-    high: totalAnnual > 0 ? capexHigh / totalAnnual : null,
-  };
+  out.capex = { low: totalRoofM2*CONFIG.capexLowPerM2, high: totalRoofM2*CONFIG.capexHighPerM2 };
+  out.payback = { low: totalAnnual>0 ? out.capex.low/totalAnnual : null, high: totalAnnual>0 ? out.capex.high/totalAnnual : null };
   out._cycles = v.cycles;
   return out;
 }
 
-/* ============================================================
-   ENGINE
-   ============================================================ */
 const fmtMoney = n => {
   if (n === null || n === undefined || isNaN(n)) return '—';
   const sign = n < 0 ? '-' : '';
   return sign + '$' + Math.abs(Math.round(n)).toLocaleString('en-AU');
-};
-const fmtMoneyDp = n => {
-  if (n === null || n === undefined || isNaN(n)) return '—';
-  const sign = n < 0 ? '-' : '';
-  return sign + '$' + Math.abs(n).toLocaleString('en-AU', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 };
 const fmtYears = n => n === null || isNaN(n) ? '—' : n.toFixed(1) + ' yrs';
 
@@ -423,7 +326,6 @@ function applyBranding() {
     document.getElementById('hero-title').textContent = 'Calculate the upside of switching to covered pens';
     document.getElementById('hero-subtitle').textContent = 'Enter your operation details below — results update instantly.';
     document.getElementById('footer-brand').textContent = 'Covered Pen Feedlot ROI Calculator';
-    // hide privacy line on generic? Keep it — data still goes back. But strip Entegra mention.
     document.querySelector('.privacy').innerHTML = 'Information is handled in accordance with our <a href="https://www.entegra.com.au/privacy-policy/" target="_blank" rel="noopener">Privacy Policy</a>.';
   }
 }
@@ -439,10 +341,7 @@ function renderInputs() {
       state[f.key] = f.default;
       const row = document.createElement('div');
       row.className = 'field';
-      row.innerHTML = `
-        <label title="${f.info}">${f.label}<span class="info">${f.info}</span></label>
-        <input type="number" step="any" id="in_${f.key}" value="${f.default}">
-        <span class="units">${f.units}</span>`;
+      row.innerHTML = `<label title="${f.info}">${f.label}<span class="info">${f.info}</span></label><input type="number" step="any" id="in_${f.key}" value="${f.default}"><span class="units">${f.units}</span>`;
       wrap.appendChild(row);
     }
     root.appendChild(wrap);
@@ -450,8 +349,8 @@ function renderInputs() {
   document.querySelectorAll('input[id^="in_"]').forEach(el => {
     el.addEventListener('input', () => {
       const key = el.id.replace('in_', '');
-      const v = parseFloat(el.value);
-      state[key] = isNaN(v) ? 0 : v;
+      const val = parseFloat(el.value);
+      state[key] = isNaN(val) ? 0 : val;
       recompute();
     });
   });
@@ -467,25 +366,14 @@ function renderResults(r) {
     const annual = row.diff;
     const cls = annual >= 0 ? 'pos' : 'neg';
     const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${row.label}</td>
-      <td class="${cls}">${fmtMoney(annual)}</td>
-      <td class="${cls}">${fmtMoney(annual / cycles)}</td>
-      <td class="${cls}">${fmtMoney(annual / 12)}</td>
-      <td class="${cls}">${fmtMoney(annual / 365)}</td>`;
+    tr.innerHTML = `<td>${row.label}</td><td class="${cls}">${fmtMoney(annual)}</td><td class="${cls}">${fmtMoney(annual/cycles)}</td><td class="${cls}">${fmtMoney(annual/12)}</td><td class="${cls}">${fmtMoney(annual/365)}</td>`;
     body.appendChild(tr);
   }
   const total = r.total.diff;
   const tr = document.createElement('tr');
   tr.className = 'total-row';
-  tr.innerHTML = `
-    <td>Total Annual Benefit</td>
-    <td>${fmtMoney(total)}</td>
-    <td>${fmtMoney(total / cycles)}</td>
-    <td>${fmtMoney(total / 12)}</td>
-    <td>${fmtMoney(total / 365)}</td>`;
+  tr.innerHTML = `<td>Total Annual Benefit</td><td>${fmtMoney(total)}</td><td>${fmtMoney(total/cycles)}</td><td>${fmtMoney(total/12)}</td><td>${fmtMoney(total/365)}</td>`;
   body.appendChild(tr);
-
   document.getElementById('capex-range').textContent = `${fmtMoney(r.capex.low)} – ${fmtMoney(r.capex.high)}`;
   document.getElementById('payback-range').textContent = r.payback.low ? `${fmtYears(r.payback.low)} – ${fmtYears(r.payback.high)}` : '—';
 }
@@ -507,9 +395,6 @@ function resetDefaults() {
   recompute();
 }
 
-/* ============================================================
-   PDF + WEBHOOK
-   ============================================================ */
 function openModal() { document.getElementById('email-modal').classList.add('active'); }
 function closeModal() {
   document.getElementById('email-modal').classList.remove('active');
@@ -517,7 +402,7 @@ function closeModal() {
 }
 
 async function submitWebhook(contact) {
-  if (!CONFIG.webhookUrl) return; // not configured yet
+  if (!CONFIG.webhookUrl) return;
   const inputsClean = { ...state };
   delete inputsClean._results;
   const payload = {
@@ -534,12 +419,8 @@ async function submitWebhook(contact) {
     inputs_json: JSON.stringify(inputsClean),
   };
   try {
-    await fetch(CONFIG.webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-  } catch (e) { /* silent — don't block PDF */ }
+    await fetch(CONFIG.webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  } catch (e) { /* silent */ }
 }
 
 function generatePDF(contact) {
@@ -555,10 +436,7 @@ function generatePDF(contact) {
   const cover = document.createElement('div');
   cover.style.padding = '20px';
   cover.style.fontFamily = 'Segoe UI, sans-serif';
-  cover.innerHTML = `
-    <h2 style="color:#2C3E50;margin-bottom:8px;">Prepared for: ${contact.name}${contact.company ? ' (' + contact.company + ')' : ''}</h2>
-    <p style="font-size:12px;color:#6B7280;">Generated ${new Date().toLocaleDateString('en-AU')} · ${CONFIG.brand === 'ridgeback' ? 'Ridgeback® ROI Calculator' : 'Covered Pen Feedlot ROI Calculator'}</p>
-    <hr style="margin:12px 0;border:none;border-top:1px solid #E5E7EB;">`;
+  cover.innerHTML = `<h2 style="color:#2C3E50;margin-bottom:8px;">Prepared for: ${contact.name}${contact.company ? ' (' + contact.company + ')' : ''}</h2><p style="font-size:12px;color:#6B7280;">Generated ${new Date().toLocaleDateString('en-AU')} · ${CONFIG.brand === 'ridgeback' ? 'Ridgeback® ROI Calculator' : 'Covered Pen Feedlot ROI Calculator'}</p><hr style="margin:12px 0;border:none;border-top:1px solid #E5E7EB;">`;
   const wrap = target.cloneNode(true);
   wrap.insertBefore(cover, wrap.firstChild);
   html2pdf().set(opt).from(wrap).save();
@@ -568,7 +446,6 @@ document.addEventListener('DOMContentLoaded', () => {
   applyBranding();
   renderInputs();
   recompute();
-
   document.getElementById('reset-btn').addEventListener('click', resetDefaults);
   document.getElementById('pdf-btn').addEventListener('click', openModal);
   document.getElementById('modal-cancel').addEventListener('click', closeModal);
@@ -591,4 +468,12 @@ document.addEventListener('DOMContentLoaded', () => {
     generatePDF({ name, email, company });
     setTimeout(() => {
       btn.textContent = 'Download PDF';
-      btn.disab
+      btn.disabled = false;
+      closeModal();
+    }, 1200);
+  });
+});
+</script>
+</body>
+</html>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
