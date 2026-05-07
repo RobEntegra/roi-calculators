@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ridgeback® ROI Calculator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<style>
+  :root {
+    --brand-primary: #8B1A1A;
+    --brand-primary-dark: #6B1414;
+    --brand-accent: #2C3E50;
+    --brand-gold: #C9A961;
+    --bg: #FFFFFF;
+    --section-bg: #F8F9FA;
+    --text-dark: #1F2937;
+    --text-muted: #6B7280;
+    --border: #E5E7EB;
+    --border-strong: #D1D5DB;
+    --positive: #059669;
+    --negative: #DC2626;
+    --highlight: #FEF3C7;
+  }
+  body[data-brand="generic"] {
+    --brand-primary: #1E3A8A;
+    --brand-primary-dark: #1E2F6B;
+    --brand-accent: #334155;
+    --brand-gold: #64748B;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif; background: #F1F3F5; color: var(--text-dark); line-height: 1.5; }
+  a { color: var(--brand-primary); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .hero { background: linear-gradient(135deg, var(--brand-accent) 0%, var(--brand-primary) 100%); color: #fff; padding: 32px 24px 40px; }
+  .hero-inner { max-width: 1280px; margin: 0 auto; }
+  .brand-bar { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+  .logo { font-size: 26px; font-weight: 800; letter-spacing: 1px; }
+  .logo .reg { font-size: 14px; vertical-align: super; }
+  .tagline { font-size: 14px; opacity: 0.85; padding-left: 16px; border-left: 2px solid rgba(255,255,255,0.3); }
+  .hero h1 { font-size: 28px; font-weight: 600; margin-bottom: 8px; max-width: 800px; }
+  .hero .subtitle { font-size: 16px; opacity: 0.9; max-width: 700px; }
+
+  .container { max-width: 1280px; margin: 0 auto; padding: 24px; }
+  .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } }
+
+  .panel { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 20px; }
+  .panel-title { font-size: 18px; font-weight: 700; margin-bottom: 16px; color: var(--brand-accent); display: flex; align-items: center; gap: 10px; }
+  .panel-title .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--brand-primary); }
+
+  .category { margin-bottom: 20px; }
+  .category h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-primary); margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  .field { display: grid; grid-template-columns: 1fr 110px 60px; gap: 8px; align-items: center; padding: 6px 0; }
+  .field label { font-size: 13px; color: var(--text-dark); cursor: help; }
+  .field label .info { font-size: 11px; color: var(--text-muted); display: block; margin-top: 1px; }
+  .field input { width: 100%; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 4px; font-size: 14px; text-align: right; font-family: inherit; }
+  .field input:focus { outline: 2px solid var(--brand-primary); outline-offset: -1px; border-color: var(--brand-primary); }
+  .field .units { font-size: 11px; color: var(--text-muted); }
+
+  .results-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .results-table th { text-align: right; font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 6px; border-bottom: 2px solid var(--border-strong); }
+  .results-table th:first-child { text-align: left; }
+  .results-table td { padding: 8px 6px; border-bottom: 1px solid var(--border); text-align: right; font-variant-numeric: tabular-nums; }
+  .results-table td:first-child { text-align: left; font-weight: 500; }
+  .results-table tr:last-child td { border-bottom: none; }
+  .results-table .total-row td { font-weight: 700; font-size: 14px; border-top: 2px solid var(--brand-accent); border-bottom: none; padding-top: 12px; }
+  .results-table .total-row { background: var(--highlight); }
+  .results-table .neg { color: var(--negative); }
+  .results-table .pos { color: var(--positive); }
+
+  .yield-box { margin-top: 20px; padding: 18px; background: var(--brand-accent); color: #fff; border-radius: 8px; }
+  .yield-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.8; margin-bottom: 12px; }
+  .yield-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .yield-item { padding: 12px; background: rgba(255,255,255,0.08); border-radius: 6px; }
+  .yield-item-label { font-size: 11px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.05em; }
+  .yield-item-value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+  .yield-item-sub { font-size: 11px; opacity: 0.75; margin-top: 2px; }
+
+  .actions-bar { max-width: 1280px; margin: 24px auto; padding: 0 24px; display: flex; gap: 12px; justify-content: flex-end; align-items: center; flex-wrap: wrap; }
+  .btn { padding: 12px 24px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; font-family: inherit; transition: all 0.15s; }
+  .btn-primary { background: var(--brand-primary); color: #fff; }
+  .btn-primary:hover { background: var(--brand-primary-dark); }
+  .btn-secondary { background: #fff; color: var(--brand-accent); border: 1px solid var(--border-strong); }
+  .btn-secondary:hover { background: var(--section-bg); }
+
+  .disclaimer { max-width: 1280px; margin: 16px auto 32px; padding: 0 24px; font-size: 11px; color: var(--text-muted); line-height: 1.6; }
+  .disclaimer p { margin-bottom: 6px; }
+  .privacy { font-size: 10px; }
+
+  .footer { background: var(--brand-accent); color: #fff; padding: 24px; text-align: center; font-size: 13px; }
+  .footer a { color: #fff; opacity: 0.85; }
+  .footer .contact { margin-top: 8px; opacity: 0.85; font-size: 12px; }
+  body[data-brand="generic"] .footer .contact { display: none; }
+  body[data-brand="generic"] .brand-bar .reg { display: none; }
+
+  .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+  .modal-overlay.active { display: flex; }
+  .modal { background: #fff; border-radius: 8px; padding: 28px; max-width: 440px; width: 100%; }
+  .modal h2 { font-size: 20px; margin-bottom: 6px; color: var(--brand-accent); }
+  .modal p { font-size: 14px; color: var(--text-muted); margin-bottom: 20px; }
+  .modal-field { margin-bottom: 14px; }
+  .modal-field label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: var(--text-dark); }
+  .modal-field input { width: 100%; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: 4px; font-size: 14px; font-family: inherit; }
+  .modal-field input:focus { outline: 2px solid var(--brand-primary); outline-offset: -1px; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+  .modal-error { color: var(--negative); font-size: 12px; margin-top: 8px; display: none; }
+
+  /* PDF-specific */
+  .pdf-only { display: none; }
+  @media print {
+    body { background: #fff; }
+    .actions-bar, .modal-overlay { display: none !important; }
+  }
+</style>
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-inner">
+      <div class="brand-bar">
+        <div class="logo" id="logo-text">RIDGEBACK<span class="reg">®</span></div>
+        <div class="tagline" id="tagline-text">Covered Pen Feedlot ROI Calculator</div>
+      </div>
+      <h1 id="hero-title">Calculate the upside of switching to Ridgeback covered pens</h1>
+      <p class="subtitle" id="hero-subtitle">Enter your operation details below — results update instantly.</p>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="layout">
+      <section class="panel">
+        <div class="panel-title"><span class="dot"></span>Your Operation</div>
+        <div id="inputs-panel"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title"><span class="dot"></span>Annual Upside</div>
+        <table class="results-table" id="results-table">
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>Annual</th>
+              <th>Per Cycle</th>
+              <th>Monthly</th>
+              <th>Daily</th>
+            </tr>
+          </thead>
+          <tbody id="results-body"></tbody>
+        </table>
+
+        <div class="yield-box">
+          <div class="yield-title">Investment & Payback</div>
+          <div class="yield-grid">
+            <div class="yield-item">
+              <div class="yield-item-label">Total Investment</div>
+              <div class="yield-item-value" id="capex-range">—</div>
+              <div class="yield-item-sub">Range based on $160–$190/m²</div>
+            </div>
+            <div class="yield-item">
+              <div class="yield-item-label">Asset Yield</div>
+              <div class="yield-item-value" id="payback-range">—</div>
+              <div class="yield-item-sub">Years to recoup investment</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div class="actions-bar">
+    <button class="btn btn-secondary" id="reset-btn">Reset to defaults</button>
+    <button class="btn btn-primary" id="pdf-btn">Download PDF Report</button>
+  </div>
+
+  <div class="disclaimer">
+    <p>This ROI calculator is a guide only, based on general assumptions. Results may vary due to unique feedlot operations, market conditions, and other factors. Entegra disclaims liability for decisions based on these calculations. Consult experts before acting.</p>
+    <p class="privacy">Information is handled in accordance with Entegra's <a href="https://www.entegra.com.au/privacy-policy/" target="_blank" rel="noopener">Privacy Policy</a>.</p>
+  </div>
+
+  <footer class="footer">
+    <div id="footer-brand">Ridgeback® · Engineered by Entegra</div>
+    <div class="contact">Tel: 1300 296 206 · <a href="https://www.theridgeback.com.au" target="_blank" rel="noopener">www.theridgeback.com.au</a> · <a href="https://www.entegra.com.au" target="_blank" rel="noopener">www.entegra.com.au</a></div>
+  </footer>
+
+  <div class="modal-overlay" id="email-modal">
+    <div class="modal">
+      <h2>One quick step</h2>
+      <p>Enter your details to download your personalised PDF report.</p>
+      <div class="modal-field">
+        <label for="m-name">Name</label>
+        <input type="text" id="m-name" required>
+      </div>
+      <div class="modal-field">
+        <label for="m-email">Email</label>
+        <input type="email" id="m-email" required>
+      </div>
+      <div class="modal-field">
+        <label for="m-company">Company / Property (optional)</label>
+        <input type="text" id="m-company">
+      </div>
+      <div class="modal-error" id="modal-error">Please enter your name and a valid email.</div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="modal-cancel">Cancel</button>
+        <button class="btn btn-primary" id="modal-submit">Download PDF</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ============================================================
+   CONFIG — change these per calculator. Engine code below stays the same.
+   ============================================================ */
+const CONFIG = {
+  brand: new URLSearchParams(location.search).get('brand') === 'ridgeback' ? 'ridgeback' : 'generic',
+  webhookUrl: 'https://default4198dfe9b47a4176a64f5660e8a06b.a6.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/5fe0da60f109453f992a1ddd0cfa433f/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=a0Zr1kVwsfULVFTzMrLeef69joWOSPs8RADNsEZHEH4'
+  pdfFilename: 'ROI-Calculator-Report.pdf',
+  capexLowPerM2: 160,
+  capexHighPerM2: 190,
+};
+
+/* ============================================================
+   INPUTS — mirrors the Inputs sheet of the .xltx, grouped by category
+   key = variable name used in formulas
+   ============================================================ */
+const INPUT_CATEGORIES = [
+  { name: 'Site & Specification', fields: [
+    { key: 'scu', label: 'Total SCU (Standard Cattle Units)', info: 'Head on feed at any given time', units: 'SCU', default: 1500 },
+    { key: 'value_scu', label: 'Value per SCU', info: 'Economic value per head', units: '$/SCU', default: 3000 },
+    { key: 'heat_events', label: 'Extreme Heat Events per Year', info: 'Annual heat events', units: 'events/yr', default: 6 },
+    { key: 'rain_days', label: 'Rain Days per Year', info: 'Annual days with rainfall', units: 'days/yr', default: 12 },
+    { key: 'live_weight_price', label: 'Live Weight Price', info: 'Price per kg of live weight', units: '$/kg', default: 5 },
+    { key: 'feed_cost', label: 'Feed Cost', info: 'Cost of feed per tonne', units: '$/tonne', default: 485 },
+    { key: 'cycles', label: 'Cycles per Year', info: 'Feeding cycles annually', units: 'cycles/yr', default: 3 },
+    { key: 'days_on_feed', label: 'Days on Feed per Cycle', info: 'Days per feeding cycle', units: 'days', default: 120 },
+    { key: 'density_trad', label: 'Density (Traditional)', info: 'Space per SCU in open pens', units: 'm²/SCU', default: 12 },
+    { key: 'density_ridge', label: 'Density (Ridgeback)', info: 'Space per SCU in covered pens', units: 'm²/SCU', default: 9 },
+  ]},
+  { name: 'Mortality', fields: [
+    { key: 'mort_trad', label: 'Mortality Rate per Event (Trad)', info: 'Deaths per 1,000 SCU per heat event', units: '/1000', default: 0.625 },
+    { key: 'mort_ridge', label: 'Mortality Rate per Event (Ridge)', info: 'Deaths per 1,000 SCU per heat event', units: '/1000', default: 0 },
+  ]},
+  { name: 'Morbidity', fields: [
+    { key: 'morb_trad', label: 'Morbidity Rate (Trad)', info: '% of SCU sick per cycle', units: '%', default: 10 },
+    { key: 'morb_ridge', label: 'Morbidity Rate (Ridge)', info: '% of SCU sick per cycle', units: '%', default: 2 },
+    { key: 'vet_cost', label: 'Vet Cost per Sick SCU', info: 'Per sick animal', units: '$/SCU', default: 75 },
+    { key: 'med_cost', label: 'Medication Cost per Sick SCU', info: 'Per sick animal', units: '$/SCU', default: 75 },
+    { key: 'sick_days', label: 'Avg Days of Sickness', info: 'Days ADG is affected per sick SCU', units: 'days', default: 10 },
+    { key: 'daily_adg_loss', label: 'Avg Daily ADG Loss per Sick SCU', info: 'Daily kg loss', units: 'kg/day', default: 0.5 },
+  ]},
+  { name: 'Dag Loading', fields: [
+    { key: 'dag_trad', label: 'Dag Loading Rate (Trad)', info: '% of SCU with dag penalty', units: '%', default: 10 },
+    { key: 'dag_ridge', label: 'Dag Loading Rate (Ridge)', info: '% of SCU with dag penalty', units: '%', default: 0 },
+    { key: 'dag_penalty', label: 'Penalty per SCU', info: 'Cost of dag penalty', units: '$/SCU', default: 20 },
+  ]},
+  { name: 'Feed Wastage', fields: [
+    { key: 'feed_per_day', label: 'Feed per SCU per Day', info: 'Daily intake', units: 'kg/SCU/day', default: 15 },
+    { key: 'wastage_trad', label: 'Wastage Rate (Trad)', info: '% of feed wasted on rain days', units: '%', default: 10 },
+    { key: 'wastage_ridge', label: 'Wastage Rate (Ridge)', info: '% of feed wasted on rain days', units: '%', default: 2 },
+  ]},
+  { name: 'ADG (Average Daily Gain)', fields: [
+    { key: 'adg_trad', label: 'ADG (Traditional)', info: 'kg/day', units: 'kg/day', default: 2 },
+    { key: 'adg_ridge', label: 'ADG (Ridgeback)', info: 'kg/day', units: 'kg/day', default: 2.2 },
+  ]},
+  { name: 'Quality & Consistency', fields: [
+    { key: 'delta_quality', label: 'Quality Premium (Δ)', info: 'Additional $/kg from quality', units: '$/kg', default: 0.1 },
+    { key: 'days_affected_heat', label: 'Days Affected per Heat Event', info: 'Days ADG reduced', units: 'days', default: 6 },
+    { key: 'adg_reduction_heat', label: 'ADG Reduction in Heat', info: 'kg/day reduction', units: 'kg/day', default: 0.5 },
+  ]},
+  { name: 'Staff Productivity', fields: [
+    { key: 'staff_per_1000_trad', label: 'Staff per 1,000 SCU (Trad)', info: 'Headcount ratio', units: 'staff/1000', default: 1 },
+    { key: 'staff_per_1000_ridge', label: 'Staff per 1,000 SCU (Ridge)', info: 'Headcount ratio', units: 'staff/1000', default: 0.875 },
+    { key: 'salary', label: 'Salary per Staff Member', info: 'Annual', units: '$/yr', default: 60000 },
+  ]},
+  { name: 'Pen Cleaning & Bedding', fields: [
+    { key: 'bedding_ridge', label: 'Bedding Cost (Ridge)', info: 'Per SCU per year', units: '$/SCU/yr', default: 50 },
+    { key: 'bedding_trad', label: 'Bedding Cost (Trad)', info: 'Per SCU per year', units: '$/SCU/yr', default: 10 },
+    { key: 'cleaning_cost_m2', label: 'Cleaning Cost per m²', info: 'Per clean', units: '$/m²', default: 0.8 },
+    { key: 'cleans_trad', label: 'Cleans per Year (Trad)', info: 'Frequency', units: '/yr', default: 5 },
+    { key: 'cleans_ridge', label: 'Cleans per Year (Ridge)', info: 'Frequency', units: '/yr', default: 3 },
+  ]},
+  { name: 'Manure Fertiliser', fields: [
+    { key: 'manure_trad', label: 'Manure Value (Trad)', info: 'Per SCU per year', units: '$/SCU/yr', default: 10 },
+    { key: 'manure_ridge', label: 'Manure Value (Ridge)', info: 'Per SCU per year', units: '$/SCU/yr', default: 10 },
+  ]},
+  { name: 'Water', fields: [
+    { key: 'water_cost', label: 'Cost of Water', info: 'Per megalitre', units: '$/ML', default: 15000 },
+    { key: 'water_consumption', label: 'Water Consumption', info: 'Per SCU per day (Trad)', units: 'L/SCU/day', default: 50 },
+    { key: 'rainfall', label: 'Average Annual Rainfall', info: 'At feedlot site', units: 'mm/yr', default: 600 },
+    { key: 'water_reduction', label: 'Water Consumption Reduction (Ridge)', info: 'Estimated reduction', units: 'fraction', default: 0.15 },
+  ]},
+];
+
+/* ============================================================
+   FORMULAS — each returns { trad, ridge, diff } in $/year
+   diff is sign-corrected so positive = upside for Ridgeback
+   ============================================================ */
+function computeAll(v) {
+  const out = {};
+  // 1. Mortality (cost saving: trad - ridge)
+  {
+    const trad = v.heat_events * (v.mort_trad / 1000) * v.scu * v.value_scu;
+    const ridge = v.heat_events * (v.mort_ridge / 1000) * v.scu * v.value_scu;
+    out.mortality = { label: 'Mortality', trad, ridge, diff: trad - ridge };
+  }
+  // 2. Morbidity (cost saving)
+  {
+    const adgLossTotal = v.sick_days * v.daily_adg_loss * v.live_weight_price;
+    const treatmentCost = v.vet_cost + v.med_cost + adgLossTotal;
+    const trad = v.cycles * (v.morb_trad / 100) * v.scu * treatmentCost;
+    const ridge = v.cycles * (v.morb_ridge / 100) * v.scu * treatmentCost;
+    out.morbidity = { label: 'Morbidity', trad, ridge, diff: trad - ridge };
+  }
+  // 3. Dag Loading (cost saving)
+  {
+    const trad = v.cycles * (v.dag_trad / 100) * v.scu * v.dag_penalty;
+    const ridge = v.cycles * (v.dag_ridge / 100) * v.scu * v.dag_penalty;
+    out.dag = { label: 'Dag Loading', trad, ridge, diff: trad - ridge };
+  }
+  // 4. Feed Wastage (cost saving)
+  {
+    const tonnes = v.feed_per_day * v.scu / 1000;
+    const trad = v.rain_days * (v.wastage_trad / 100) * tonnes * v.feed_cost;
+    const ridge = v.rain_days * (v.wastage_ridge / 100) * tonnes * v.feed_cost;
+    out.feed_wastage = { label: 'Feed Wastage', trad, ridge, diff: trad - ridge };
+  }
+  // 5. ADG (income gain: ridge - trad)
+  {
+    const trad = v.cycles * v.scu * v.days_on_feed * v.adg_trad * v.live_weight_price;
+    const ridge = v.cycles * v.scu * v.days_on_feed * v.adg_ridge * v.live_weight_price;
+    out.adg = { label: 'ADG (extra weight gain)', trad, ridge, diff: ridge - trad };
+  }
+  // 6. Carcass Quality (income gain)
+  {
+    const trad = 0;
+    const ridge = v.cycles * v.scu * v.days_on_feed * v.adg_ridge * v.delta_quality;
+    out.quality = { label: 'Carcass Quality', trad, ridge, diff: ridge - trad };
+  }
+  // 7. Consistency (cost saving — heat-event ADG loss avoided)
+  {
+    const trad = v.heat_events * v.days_affected_heat * v.scu * v.adg_reduction_heat * v.live_weight_price;
+    const ridge = 0;
+    out.consistency = { label: 'Consistency (heat ADG)', trad, ridge, diff: trad - ridge };
+  }
+  // 8. Staff Productivity (cost saving)
+  {
+    const trad = (v.scu / 1000) * v.staff_per_1000_trad * v.salary;
+    const ridge = (v.scu / 1000) * v.staff_per_1000_ridge * v.salary;
+    out.staff = { label: 'Staff Productivity', trad, ridge, diff: trad - ridge };
+  }
+  // 9. Pen Cleaning (cost saving)
+  {
+    const trad = v.scu * v.density_trad * v.cleaning_cost_m2 * v.cleans_trad;
+    const ridge = v.scu * v.density_ridge * v.cleaning_cost_m2 * v.cleans_ridge;
+    out.cleaning = { label: 'Pen Cleaning', trad, ridge, diff: trad - ridge };
+  }
+  // 10. Bedding (cost — usually negative for Ridge since bedding is higher)
+  {
+    const trad = v.scu * v.bedding_trad;
+    const ridge = v.scu * v.bedding_ridge;
+    out.bedding = { label: 'Bedding System', trad, ridge, diff: trad - ridge };
+  }
+  // 11. Manure (income)
+  {
+    const trad = v.scu * v.manure_trad;
+    const ridge = v.scu * v.manure_ridge;
+    out.manure = { label: 'Manure Fertiliser', trad, ridge, diff: ridge - trad };
+  }
+  // 12. Water Usage (cost saving)
+  {
+    const tradML = (v.scu * v.water_consumption * 365) / 1000000;
+    const ridgeML = tradML * (1 - v.water_reduction);
+    const trad = tradML * v.water_cost;
+    const ridge = ridgeML * v.water_cost;
+    out.water_usage = { label: 'Water Consumption', trad, ridge, diff: trad - ridge };
+  }
+  // 13. Water Access (income — harvested rainfall)
+  {
+    const roofM2 = v.scu * v.density_ridge;
+    const harvestML = (roofM2 / 1000000) * v.rainfall;
+    const ridge = harvestML * v.water_cost;
+    out.water_access = { label: 'Water Harvest', trad: 0, ridge, diff: ridge - 0 };
+  }
+  // Total
+  let totalAnnual = 0;
+  for (const k in out) totalAnnual += out[k].diff;
+  out.total = { label: 'Total Annual Benefit', diff: totalAnnual };
+  // Investment & yield
+  const totalRoofM2 = v.scu * v.density_ridge;
+  const capexLow = totalRoofM2 * CONFIG.capexLowPerM2;
+  const capexHigh = totalRoofM2 * CONFIG.capexHighPerM2;
+  out.capex = { low: capexLow, high: capexHigh };
+  out.payback = {
+    low: totalAnnual > 0 ? capexLow / totalAnnual : null,
+    high: totalAnnual > 0 ? capexHigh / totalAnnual : null,
+  };
+  out._cycles = v.cycles;
+  return out;
+}
+
+/* ============================================================
+   ENGINE
+   ============================================================ */
+const fmtMoney = n => {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  const sign = n < 0 ? '-' : '';
+  return sign + '$' + Math.abs(Math.round(n)).toLocaleString('en-AU');
+};
+const fmtMoneyDp = n => {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  const sign = n < 0 ? '-' : '';
+  return sign + '$' + Math.abs(n).toLocaleString('en-AU', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+};
+const fmtYears = n => n === null || isNaN(n) ? '—' : n.toFixed(1) + ' yrs';
+
+const state = {};
+
+function applyBranding() {
+  document.body.dataset.brand = CONFIG.brand;
+  if (CONFIG.brand === 'generic') {
+    document.title = 'Covered Pen Feedlot ROI Calculator';
+    document.getElementById('logo-text').innerHTML = 'COVERED PEN';
+    document.getElementById('tagline-text').textContent = 'Feedlot ROI Calculator';
+    document.getElementById('hero-title').textContent = 'Calculate the upside of switching to covered pens';
+    document.getElementById('hero-subtitle').textContent = 'Enter your operation details below — results update instantly.';
+    document.getElementById('footer-brand').textContent = 'Covered Pen Feedlot ROI Calculator';
+    // hide privacy line on generic? Keep it — data still goes back. But strip Entegra mention.
+    document.querySelector('.privacy').innerHTML = 'Information is handled in accordance with our <a href="https://www.entegra.com.au/privacy-policy/" target="_blank" rel="noopener">Privacy Policy</a>.';
+  }
+}
+
+function renderInputs() {
+  const root = document.getElementById('inputs-panel');
+  root.innerHTML = '';
+  for (const cat of INPUT_CATEGORIES) {
+    const wrap = document.createElement('div');
+    wrap.className = 'category';
+    wrap.innerHTML = `<h3>${cat.name}</h3>`;
+    for (const f of cat.fields) {
+      state[f.key] = f.default;
+      const row = document.createElement('div');
+      row.className = 'field';
+      row.innerHTML = `
+        <label title="${f.info}">${f.label}<span class="info">${f.info}</span></label>
+        <input type="number" step="any" id="in_${f.key}" value="${f.default}">
+        <span class="units">${f.units}</span>`;
+      wrap.appendChild(row);
+    }
+    root.appendChild(wrap);
+  }
+  document.querySelectorAll('input[id^="in_"]').forEach(el => {
+    el.addEventListener('input', () => {
+      const key = el.id.replace('in_', '');
+      const v = parseFloat(el.value);
+      state[key] = isNaN(v) ? 0 : v;
+      recompute();
+    });
+  });
+}
+
+function renderResults(r) {
+  const body = document.getElementById('results-body');
+  body.innerHTML = '';
+  const keys = ['mortality','morbidity','dag','feed_wastage','adg','quality','consistency','staff','cleaning','bedding','manure','water_usage','water_access'];
+  const cycles = r._cycles;
+  for (const k of keys) {
+    const row = r[k];
+    const annual = row.diff;
+    const cls = annual >= 0 ? 'pos' : 'neg';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${row.label}</td>
+      <td class="${cls}">${fmtMoney(annual)}</td>
+      <td class="${cls}">${fmtMoney(annual / cycles)}</td>
+      <td class="${cls}">${fmtMoney(annual / 12)}</td>
+      <td class="${cls}">${fmtMoney(annual / 365)}</td>`;
+    body.appendChild(tr);
+  }
+  const total = r.total.diff;
+  const tr = document.createElement('tr');
+  tr.className = 'total-row';
+  tr.innerHTML = `
+    <td>Total Annual Benefit</td>
+    <td>${fmtMoney(total)}</td>
+    <td>${fmtMoney(total / cycles)}</td>
+    <td>${fmtMoney(total / 12)}</td>
+    <td>${fmtMoney(total / 365)}</td>`;
+  body.appendChild(tr);
+
+  document.getElementById('capex-range').textContent = `${fmtMoney(r.capex.low)} – ${fmtMoney(r.capex.high)}`;
+  document.getElementById('payback-range').textContent = r.payback.low ? `${fmtYears(r.payback.low)} – ${fmtYears(r.payback.high)}` : '—';
+}
+
+function recompute() {
+  const r = computeAll(state);
+  renderResults(r);
+  state._results = r;
+}
+
+function resetDefaults() {
+  for (const cat of INPUT_CATEGORIES) {
+    for (const f of cat.fields) {
+      state[f.key] = f.default;
+      const el = document.getElementById('in_' + f.key);
+      if (el) el.value = f.default;
+    }
+  }
+  recompute();
+}
+
+/* ============================================================
+   PDF + WEBHOOK
+   ============================================================ */
+function openModal() { document.getElementById('email-modal').classList.add('active'); }
+function closeModal() {
+  document.getElementById('email-modal').classList.remove('active');
+  document.getElementById('modal-error').style.display = 'none';
+}
+
+async function submitWebhook(contact) {
+  if (!CONFIG.webhookUrl) return; // not configured yet
+  const inputsClean = { ...state };
+  delete inputsClean._results;
+  const payload = {
+    timestamp: new Date().toISOString(),
+    brand: CONFIG.brand,
+    name: contact.name,
+    email: contact.email,
+    company: contact.company,
+    total_annual: state._results?.total?.diff ?? 0,
+    capex_low: state._results?.capex?.low ?? 0,
+    capex_high: state._results?.capex?.high ?? 0,
+    payback_low: state._results?.payback?.low ?? 0,
+    payback_high: state._results?.payback?.high ?? 0,
+    inputs_json: JSON.stringify(inputsClean),
+  };
+  try {
+    await fetch(CONFIG.webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch (e) { /* silent — don't block PDF */ }
+}
+
+function generatePDF(contact) {
+  const opt = {
+    margin: 10,
+    filename: CONFIG.pdfFilename,
+    image: { type: 'jpeg', quality: 0.95 },
+    html2canvas: { scale: 2, useCORS: true },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+  };
+  const target = document.querySelector('main.container');
+  const cover = document.createElement('div');
+  cover.style.padding = '20px';
+  cover.style.fontFamily = 'Segoe UI, sans-serif';
+  cover.innerHTML = `
+    <h2 style="color:#2C3E50;margin-bottom:8px;">Prepared for: ${contact.name}${contact.company ? ' (' + contact.company + ')' : ''}</h2>
+    <p style="font-size:12px;color:#6B7280;">Generated ${new Date().toLocaleDateString('en-AU')} · ${CONFIG.brand === 'ridgeback' ? 'Ridgeback® ROI Calculator' : 'Covered Pen Feedlot ROI Calculator'}</p>
+    <hr style="margin:12px 0;border:none;border-top:1px solid #E5E7EB;">`;
+  const wrap = target.cloneNode(true);
+  wrap.insertBefore(cover, wrap.firstChild);
+  html2pdf().set(opt).from(wrap).save();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  applyBranding();
+  renderInputs();
+  recompute();
+
+  document.getElementById('reset-btn').addEventListener('click', resetDefaults);
+  document.getElementById('pdf-btn').addEventListener('click', openModal);
+  document.getElementById('modal-cancel').addEventListener('click', closeModal);
+  document.getElementById('email-modal').addEventListener('click', e => {
+    if (e.target.id === 'email-modal') closeModal();
+  });
+  document.getElementById('modal-submit').addEventListener('click', async () => {
+    const name = document.getElementById('m-name').value.trim();
+    const email = document.getElementById('m-email').value.trim();
+    const company = document.getElementById('m-company').value.trim();
+    const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    if (!name || !emailValid) {
+      document.getElementById('modal-error').style.display = 'block';
+      return;
+    }
+    const btn = document.getElementById('modal-submit');
+    btn.textContent = 'Generating…';
+    btn.disabled = true;
+    await submitWebhook({ name, email, company });
+    generatePDF({ name, email, company });
+    setTimeout(() => {
+      btn.textContent = 'Download PDF';
+      btn.disab
