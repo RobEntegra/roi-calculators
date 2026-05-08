@@ -1,0 +1,1327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ridgeback® ROI Calculator (v1.1 draft)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/pdfmake.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/vfs_fonts.js"></script>
+<style>
+  :root {
+    --brand-primary: #8B1A1A;
+    --brand-primary-dark: #6B1414;
+    --brand-accent: #2C3E50;
+    --brand-gold: #C9A961;
+    --bg: #FFFFFF;
+    --section-bg: #F8F9FA;
+    --text-dark: #1F2937;
+    --text-muted: #6B7280;
+    --border: #E5E7EB;
+    --border-strong: #D1D5DB;
+    --positive: #059669;
+    --negative: #DC2626;
+    --highlight: #FEF3C7;
+  }
+  body[data-brand="generic"] {
+    --brand-primary: #1E3A8A;
+    --brand-primary-dark: #1E2F6B;
+    --brand-accent: #334155;
+    --brand-gold: #64748B;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif; background: #F1F3F5; color: var(--text-dark); line-height: 1.5; }
+  a { color: var(--brand-primary); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .hero { background: linear-gradient(135deg, var(--brand-accent) 0%, var(--brand-primary) 100%); color: #fff; padding: 32px 24px 40px; }
+  .hero-inner { max-width: 1280px; margin: 0 auto; }
+  .brand-bar { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+  .logo { font-size: 26px; font-weight: 800; letter-spacing: 1px; display: flex; align-items: center; }
+  .logo .reg { font-size: 14px; vertical-align: super; }
+  .logo img { height: 132px; width: auto; display: block; }
+  .tagline { font-size: 14px; opacity: 0.85; padding-left: 16px; border-left: 2px solid rgba(255,255,255,0.3); }
+  .hero h1 { font-size: 28px; font-weight: 600; margin-bottom: 8px; max-width: 800px; }
+  .hero .subtitle { font-size: 16px; opacity: 0.9; max-width: 700px; }
+
+  .container { max-width: 1280px; margin: 0 auto; padding: 24px; }
+  .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } }
+
+  .panel { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 20px; }
+  .panel-title { font-size: 18px; font-weight: 700; margin-bottom: 16px; color: var(--brand-accent); display: flex; align-items: center; gap: 10px; }
+  .panel-title .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--brand-primary); }
+
+  .category { margin-bottom: 20px; }
+  .category h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-primary); margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  .field { display: grid; grid-template-columns: 1fr 110px 60px; gap: 8px; align-items: center; padding: 6px 0; }
+  .field label { font-size: 13px; color: var(--text-dark); cursor: help; }
+  .field label .info { font-size: 11px; color: var(--text-muted); display: block; margin-top: 1px; }
+  .field input { width: 100%; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 4px; font-size: 14px; text-align: right; font-family: inherit; }
+  .field input:focus { outline: 2px solid var(--brand-primary); outline-offset: -1px; border-color: var(--brand-primary); }
+  .field .units { font-size: 11px; color: var(--text-muted); }
+
+  .results-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .results-table th { text-align: right; font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 6px; border-bottom: 2px solid var(--border-strong); }
+  .results-table th:first-child { text-align: left; }
+  .results-table td { padding: 8px 6px; border-bottom: 1px solid var(--border); text-align: right; font-variant-numeric: tabular-nums; }
+  .results-table td:first-child { text-align: left; font-weight: 500; }
+  .results-table tr:last-child td { border-bottom: none; }
+  .results-table .total-row td { font-weight: 700; font-size: 14px; border-top: 2px solid var(--brand-accent); border-bottom: none; padding-top: 12px; }
+  .results-table .total-row { background: var(--highlight); }
+  .results-table .neg { color: var(--negative); }
+  .results-table .pos { color: var(--positive); }
+
+  .yield-box { margin-top: 20px; padding: 18px; background: var(--brand-accent); color: #fff; border-radius: 8px; }
+  .yield-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.8; margin-bottom: 12px; }
+  .yield-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .yield-item { padding: 12px; background: rgba(255,255,255,0.08); border-radius: 6px; }
+  .yield-item-label { font-size: 11px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.05em; }
+  .yield-item-value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+  .yield-item-sub { font-size: 11px; opacity: 0.75; margin-top: 2px; }
+
+  .actions-bar { max-width: 1280px; margin: 24px auto; padding: 0 24px; display: flex; gap: 12px; justify-content: flex-end; align-items: center; flex-wrap: wrap; }
+  .btn { padding: 12px 24px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; font-family: inherit; transition: all 0.15s; }
+  .btn-primary { background: var(--brand-primary); color: #fff; }
+  .btn-primary:hover { background: var(--brand-primary-dark); }
+  .btn-secondary { background: #fff; color: var(--brand-accent); border: 1px solid var(--border-strong); }
+  .btn-secondary:hover { background: var(--section-bg); }
+
+  .disclaimer { max-width: 1280px; margin: 16px auto 32px; padding: 0 24px; font-size: 11px; color: var(--text-muted); line-height: 1.6; }
+  .disclaimer p { margin-bottom: 6px; }
+  .privacy { font-size: 10px; }
+
+  .footer { background: var(--brand-accent); color: #fff; padding: 24px; text-align: center; font-size: 13px; }
+  .footer a { color: #fff; opacity: 0.85; }
+  .footer .contact { margin-top: 8px; opacity: 0.85; font-size: 12px; }
+  body[data-brand="generic"] .footer .contact { display: none; }
+  body[data-brand="generic"] .brand-bar .reg { display: none; }
+
+  .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+  .modal-overlay.active { display: flex; }
+  .modal { background: #fff; border-radius: 8px; padding: 28px; max-width: 440px; width: 100%; }
+  .modal h2 { font-size: 20px; margin-bottom: 6px; color: var(--brand-accent); }
+  .modal p { font-size: 14px; color: var(--text-muted); margin-bottom: 20px; }
+  .modal-field { margin-bottom: 14px; }
+  .modal-field label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: var(--text-dark); }
+  .modal-field input { width: 100%; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: 4px; font-size: 14px; font-family: inherit; }
+  .modal-field input:focus { outline: 2px solid var(--brand-primary); outline-offset: -1px; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+  .modal-error { color: var(--negative); font-size: 12px; margin-top: 8px; display: none; }
+
+  .pdf-only { display: none; }
+  @media print {
+    body { background: #fff; }
+    .actions-bar, .modal-overlay { display: none !important; }
+  }
+
+  /* ---------- v1.1 additions ---------- */
+  .v11-section { margin-top: 24px; }
+  .v11-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 980px) { .v11-grid { grid-template-columns: 1fr; } }
+  .v11-flag { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; background: var(--brand-gold); color: #fff; margin-left: 8px; vertical-align: middle; letter-spacing: 0.05em; }
+  .pen-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+  .pen-summary .item { padding: 10px 12px; background: var(--section-bg); border-radius: 6px; }
+  .pen-summary .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 600; }
+  .pen-summary .val { font-size: 16px; font-weight: 700; color: var(--brand-accent); margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .pen-summary .sub { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+  .pen-svg-wrap { margin-top: 18px; padding: 12px; background: #fff; border: 1px dashed var(--border-strong); border-radius: 6px; overflow: auto; }
+  .pen-svg-wrap svg { display: block; max-width: 100%; height: auto; }
+  .field-select { width: 100%; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 4px; font-size: 14px; font-family: inherit; background: #fff; }
+  .field-radio-group { display: flex; gap: 12px; padding: 4px 0; grid-column: 2 / span 2; }
+  .field-radio-group label { display: flex; align-items: center; gap: 4px; font-size: 13px; cursor: pointer; }
+  .field-radio-group input[type=radio] { margin: 0; }
+  .capex-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .capex-table th { text-align: right; font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 6px; border-bottom: 2px solid var(--border-strong); }
+  .capex-table th:first-child { text-align: left; }
+  .capex-table td { padding: 8px 6px; border-bottom: 1px solid var(--border); text-align: right; font-variant-numeric: tabular-nums; }
+  .capex-table td:first-child { text-align: left; font-weight: 500; }
+  .capex-table td input { width: 110px; padding: 5px 6px; border: 1px solid var(--border-strong); border-radius: 4px; font-size: 13px; text-align: right; font-family: inherit; }
+  .capex-table .total-row td { font-weight: 700; font-size: 14px; border-top: 2px solid var(--brand-accent); border-bottom: none; padding-top: 12px; background: var(--highlight); }
+  .capex-payback { margin-top: 14px; padding: 14px 16px; background: var(--brand-accent); color: #fff; border-radius: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .capex-payback .item { padding: 6px 0; }
+  .capex-payback .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.75; font-weight: 600; }
+  .capex-payback .val { font-size: 18px; font-weight: 700; margin-top: 2px; }
+  .capex-payback .sub { font-size: 10px; opacity: 0.7; margin-top: 1px; }
+</style>
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-inner">
+      <div class="brand-bar">
+        <div class="logo" id="logo-text"><img src="ridgeback-logo.png" alt="Ridgeback by Entegra"></div>
+        <div class="tagline" id="tagline-text">Covered Pen Feedlot ROI Calculator</div>
+      </div>
+      <h1 id="hero-title">Calculate the upside of switching to Ridgeback covered pens</h1>
+      <p class="subtitle" id="hero-subtitle">Enter your operation details below — results update instantly.</p>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="layout">
+      <section class="panel">
+        <div class="panel-title"><span class="dot"></span>Your Operation</div>
+        <div id="inputs-panel"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title"><span class="dot"></span>Annual Upside</div>
+        <table class="results-table" id="results-table">
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>Annual</th>
+              <th>Per Cycle</th>
+              <th>Monthly</th>
+              <th>Daily</th>
+            </tr>
+          </thead>
+          <tbody id="results-body"></tbody>
+        </table>
+
+        <div class="yield-box">
+          <div class="yield-title">Investment & Payback</div>
+          <div class="yield-grid">
+            <div class="yield-item">
+              <div class="yield-item-label">Total Investment</div>
+              <div class="yield-item-value" id="capex-range">—</div>
+              <div class="yield-item-sub">Range based on $160–$190/m²</div>
+            </div>
+            <div class="yield-item">
+              <div class="yield-item-label">Asset Yield</div>
+              <div class="yield-item-value" id="payback-range">—</div>
+              <div class="yield-item-sub">Years to recoup investment</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- v1.1 additions: pen layout + CAPEX breakdown -->
+    <div class="v11-section v11-grid">
+      <section class="panel">
+        <div class="panel-title"><span class="dot"></span>Pen Layout & Schematic <span class="v11-flag">v1.1</span></div>
+        <div id="pen-inputs"></div>
+        <div class="pen-summary" id="pen-summary"></div>
+        <div class="pen-svg-wrap" id="pen-svg-wrap"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title"><span class="dot"></span>CAPEX Breakdown <span class="v11-flag">v1.1</span></div>
+        <table class="capex-table" id="capex-table">
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>Lump Sum</th>
+              <th>Per SCU</th>
+              <th>% of Total</th>
+            </tr>
+          </thead>
+          <tbody id="capex-body"></tbody>
+        </table>
+        <div class="capex-payback">
+          <div class="item">
+            <div class="label">Detailed CAPEX Total</div>
+            <div class="val" id="capex-detailed-total">—</div>
+            <div class="sub" id="capex-detailed-per-m2">—</div>
+          </div>
+          <div class="item">
+            <div class="label">Payback (Detailed)</div>
+            <div class="val" id="capex-detailed-payback">—</div>
+            <div class="sub">Total ÷ annual benefit</div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div class="actions-bar">
+    <button class="btn btn-secondary" id="reset-btn">Reset to defaults</button>
+    <button class="btn btn-primary" id="pdf-btn">Download PDF Report</button>
+  </div>
+
+  <div class="disclaimer">
+    <p>This ROI calculator is a guide only, based on general assumptions. Results may vary due to unique feedlot operations, market conditions, and other factors. Entegra disclaims liability for decisions based on these calculations. Consult experts before acting.</p>
+    <p class="privacy">Information is handled in accordance with Entegra's <a href="https://www.entegra.com.au/privacy-policy/" target="_blank" rel="noopener">Privacy Policy</a>.</p>
+  </div>
+
+  <footer class="footer">
+    <div id="footer-brand">Ridgeback® · Engineered by Entegra</div>
+    <div class="contact">Tel: 1300 296 206 · <a href="https://www.theridgeback.com.au" target="_blank" rel="noopener">www.theridgeback.com.au</a> · <a href="https://www.entegra.com.au" target="_blank" rel="noopener">www.entegra.com.au</a></div>
+  </footer>
+
+  <div class="modal-overlay" id="email-modal">
+    <div class="modal">
+      <h2>One quick step</h2>
+      <p>Enter your details to download your personalised PDF report.</p>
+      <div class="modal-field">
+        <label for="m-name">Name</label>
+        <input type="text" id="m-name" required>
+      </div>
+      <div class="modal-field">
+        <label for="m-email">Email</label>
+        <input type="email" id="m-email" required>
+      </div>
+      <div class="modal-field">
+        <label for="m-company">Company / Property (optional)</label>
+        <input type="text" id="m-company">
+      </div>
+      <div class="modal-error" id="modal-error">Please enter your name and a valid email.</div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="modal-cancel">Cancel</button>
+        <button class="btn btn-primary" id="modal-submit">Download PDF</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+const CONFIG = {
+  brand: new URLSearchParams(location.search).get('brand') === 'generic' ? 'generic' : 'ridgeback',
+  webhookUrl: 'https://default4198dfe9b47a4176a64f5660e8a06b.a6.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/5fe0da60f109453f992a1ddd0cfa433f/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=a0Zr1kVwsfULVFTzMrLeef69joWOSPs8RADNsEZHEH4',
+  pdfFilename: 'ROI-Calculator-Report.pdf',
+  capexLowPerM2: 160,
+  capexHighPerM2: 190,
+};
+
+const INPUT_CATEGORIES = [
+  { name: 'Site & Specification', fields: [
+    { key: 'scu', label: 'Total SCU (Standard Cattle Units)', info: 'Head on feed at any given time', units: 'SCU', default: 1500 },
+    { key: 'value_scu', label: 'Value per SCU', info: 'Economic value per head', units: '$/SCU', default: 3000 },
+    { key: 'heat_events', label: 'Extreme Heat Events per Year', info: 'Annual heat events', units: 'events/yr', default: 6 },
+    { key: 'rain_days', label: 'Rain Days per Year', info: 'Annual days with rainfall', units: 'days/yr', default: 12 },
+    { key: 'live_weight_price', label: 'Live Weight Price', info: 'Price per kg of live weight', units: '$/kg', default: 5 },
+    { key: 'feed_cost', label: 'Feed Cost', info: 'Cost of feed per tonne', units: '$/tonne', default: 485 },
+    { key: 'cycles', label: 'Cycles per Year', info: 'Feeding cycles annually', units: 'cycles/yr', default: 3 },
+    { key: 'days_on_feed', label: 'Days on Feed per Cycle', info: 'Days per feeding cycle', units: 'days', default: 120 },
+    { key: 'density_trad', label: 'Density (Traditional)', info: 'Space per SCU in open pens', units: 'm²/SCU', default: 12 },
+    { key: 'density_ridge', label: 'Density (Ridgeback)', info: 'Space per SCU in covered pens', units: 'm²/SCU', default: 9 },
+  ]},
+  { name: 'Mortality', fields: [
+    { key: 'mort_trad', label: 'Mortality Rate per Event (Trad)', info: 'Deaths per 1,000 SCU per heat event', units: '/1000', default: 0.625 },
+    { key: 'mort_ridge', label: 'Mortality Rate per Event (Ridge)', info: 'Deaths per 1,000 SCU per heat event', units: '/1000', default: 0 },
+  ]},
+  { name: 'Morbidity', fields: [
+    { key: 'morb_trad', label: 'Morbidity Rate (Trad)', info: '% of SCU sick per cycle', units: '%', default: 10 },
+    { key: 'morb_ridge', label: 'Morbidity Rate (Ridge)', info: '% of SCU sick per cycle', units: '%', default: 2 },
+    { key: 'vet_cost', label: 'Vet Cost per Sick SCU', info: 'Per sick animal', units: '$/SCU', default: 75 },
+    { key: 'med_cost', label: 'Medication Cost per Sick SCU', info: 'Per sick animal', units: '$/SCU', default: 75 },
+    { key: 'sick_days', label: 'Avg Days of Sickness', info: 'Days ADG is affected per sick SCU', units: 'days', default: 10 },
+    { key: 'daily_adg_loss', label: 'Avg Daily ADG Loss per Sick SCU', info: 'Daily kg loss', units: 'kg/day', default: 0.5 },
+  ]},
+  { name: 'Dag Loading', fields: [
+    { key: 'dag_trad', label: 'Dag Loading Rate (Trad)', info: '% of SCU with dag penalty', units: '%', default: 10 },
+    { key: 'dag_ridge', label: 'Dag Loading Rate (Ridge)', info: '% of SCU with dag penalty', units: '%', default: 0 },
+    { key: 'dag_penalty', label: 'Penalty per SCU', info: 'Cost of dag penalty', units: '$/SCU', default: 20 },
+  ]},
+  { name: 'Feed Wastage', fields: [
+    { key: 'feed_per_day', label: 'Feed per SCU per Day', info: 'Daily intake', units: 'kg/SCU/day', default: 15 },
+    { key: 'wastage_trad', label: 'Wastage Rate (Trad)', info: '% of feed wasted on rain days', units: '%', default: 10 },
+    { key: 'wastage_ridge', label: 'Wastage Rate (Ridge)', info: '% of feed wasted on rain days', units: '%', default: 2 },
+  ]},
+  { name: 'ADG (Average Daily Gain)', fields: [
+    { key: 'adg_trad', label: 'ADG (Traditional)', info: 'kg/day', units: 'kg/day', default: 2 },
+    { key: 'adg_ridge', label: 'ADG (Ridgeback)', info: 'kg/day', units: 'kg/day', default: 2.2 },
+  ]},
+  { name: 'Quality & Consistency', fields: [
+    { key: 'delta_quality', label: 'Quality Premium (Δ)', info: 'Additional $/kg from quality', units: '$/kg', default: 0.1 },
+    { key: 'days_affected_heat', label: 'Days Affected per Heat Event', info: 'Days ADG reduced', units: 'days', default: 6 },
+    { key: 'adg_reduction_heat', label: 'ADG Reduction in Heat', info: 'kg/day reduction', units: 'kg/day', default: 0.5 },
+  ]},
+  { name: 'Staff Productivity', fields: [
+    { key: 'staff_per_1000_trad', label: 'Staff per 1,000 SCU (Trad)', info: 'Headcount ratio', units: 'staff/1000', default: 1 },
+    { key: 'staff_per_1000_ridge', label: 'Staff per 1,000 SCU (Ridge)', info: 'Headcount ratio', units: 'staff/1000', default: 0.875 },
+    { key: 'salary', label: 'Salary per Staff Member', info: 'Annual', units: '$/yr', default: 60000 },
+  ]},
+  { name: 'Pen Cleaning & Bedding', fields: [
+    { key: 'bedding_ridge', label: 'Bedding Cost (Ridge)', info: 'Per SCU per year', units: '$/SCU/yr', default: 50 },
+    { key: 'bedding_trad', label: 'Bedding Cost (Trad)', info: 'Per SCU per year', units: '$/SCU/yr', default: 10 },
+    { key: 'cleaning_cost_m2', label: 'Cleaning Cost per m²', info: 'Per clean', units: '$/m²', default: 0.8 },
+    { key: 'cleans_trad', label: 'Cleans per Year (Trad)', info: 'Frequency', units: '/yr', default: 5 },
+    { key: 'cleans_ridge', label: 'Cleans per Year (Ridge)', info: 'Frequency', units: '/yr', default: 3 },
+  ]},
+  { name: 'Manure Fertiliser', fields: [
+    { key: 'manure_trad', label: 'Manure Value (Trad)', info: 'Per SCU per year', units: '$/SCU/yr', default: 10 },
+    { key: 'manure_ridge', label: 'Manure Value (Ridge)', info: 'Per SCU per year', units: '$/SCU/yr', default: 10 },
+  ]},
+  { name: 'Water', fields: [
+    { key: 'water_cost', label: 'Cost of Water', info: 'Per megalitre', units: '$/ML', default: 15000 },
+    { key: 'water_consumption', label: 'Water Consumption', info: 'Per SCU per day (Trad)', units: 'L/SCU/day', default: 50 },
+    { key: 'rainfall', label: 'Average Annual Rainfall', info: 'At feedlot site', units: 'mm/yr', default: 600 },
+    { key: 'water_reduction', label: 'Water Consumption Reduction (Ridge)', info: 'Estimated reduction', units: 'fraction', default: 0.15 },
+  ]},
+];
+// ---------- v1.1: Pen layout + CAPEX breakdown config ----------
+const PEN_LAYOUT_DEFAULTS = {
+  pen_width: 30,
+  pen_length: 60,
+  feed_config: 'side',
+  canopy: 4,
+  overhang: 'one',
+  coverage: 100,
+};
+const PEN_WIDTH_OPTIONS = [24, 30, 36];
+
+const CAPEX_CATEGORIES = [
+  { key: 'cap_permits',     label: 'Permits & Approvals',                       default: 50000   },
+  { key: 'cap_civil',       label: 'Civil Works (earthworks, drainage, dam)',   default: 250000  },
+  { key: 'cap_barn',        label: 'Barn Structure (roof, columns, sheeting)',  default: 1300000 },
+  { key: 'cap_water',       label: 'Water Reticulation (tanks, pipes, troughs)',default: 130000  },
+  { key: 'cap_bunks',       label: 'Bunks & Feed Troughs',                      default: 180000  },
+  { key: 'cap_fences',      label: 'Fences & Gates',                            default: 70000   },
+  { key: 'cap_apron',       label: 'Concrete Apron & Turning Circles',          default: 120000  },
+  { key: 'cap_margin',      label: 'Principal Contractor Margin',               default: 250000  },
+  { key: 'cap_contingency', label: 'Contingency',                               default: 150000  },
+];
+
+function resolveOverhang(pen_width, overhang) {
+  if (overhang === 'both' && +pen_width === 36) return 'one';
+  return overhang || 'none';
+}
+function overhangCount(o) { return o === 'none' ? 0 : o === 'one' ? 1 : 2; }
+
+function computePenLayout(v) {
+  const width    = +v.pen_width  || 30;
+  const length   = +v.pen_length || 60;
+  const density  = +v.density_ridge || 9;
+  const cov      = (+v.coverage || 100) / 100;
+  const sides    = v.feed_config === 'centre' ? 2 : 1;
+  const canopy   = +v.canopy || 4;
+  const overhang = resolveOverhang(width, v.overhang);
+  const ohCount  = overhangCount(overhang);
+  const overhangM = ohCount * canopy;
+
+  const penArea     = width * length;
+  const scuPerPen   = density > 0 ? penArea / density : 0;
+  const scuRequired = (+v.scu || 0) * cov;
+  const penQty      = scuPerPen > 0 ? Math.ceil(scuRequired / scuPerPen) : 0;
+  const bunkLM      = length * penQty * sides;
+
+  const isCentre = v.feed_config === 'centre';
+  const lane_m   = isCentre ? 6 : 0;
+  const topRow   = isCentre ? Math.ceil(penQty / 2) : penQty;
+  const botRow   = isCentre ? Math.floor(penQty / 2) : 0;
+  const pensPerRow = Math.max(topRow, botRow);
+  const buildingLen   = pensPerRow * length;
+  const buildingWidth = isCentre ? (2 * width + lane_m + overhangM) : (width + overhangM);
+  const totalRoofM2   = buildingLen * buildingWidth;
+
+  const hasHospital = isCentre && (penQty % 2 === 1);
+  const hospitalCol = hasHospital ? botRow : -1;
+
+  return {
+    width, length, density, coverage: cov*100, feed_config: v.feed_config,
+    canopy, overhang, ohCount, overhangM,
+    sides, lane_m, topRow, botRow, pensPerRow, buildingLen, buildingWidth,
+    penArea, scuPerPen, scuRequired, penQty, bunkLM, totalRoofM2,
+    hasHospital, hospitalCol,
+  };
+}
+
+function computeCapexBreakdown(v) {
+  const rows = CAPEX_CATEGORIES.map(c => ({ key: c.key, label: c.label, amount: +v[c.key] || 0 }));
+  const total = rows.reduce((s, r) => s + r.amount, 0);
+  const scu = +v.scu || 0;
+  return { rows, total, perSCU: scu > 0 ? total / scu : 0 };
+}
+
+function seedV11Defaults() {
+  for (const k in PEN_LAYOUT_DEFAULTS) state[k] = PEN_LAYOUT_DEFAULTS[k];
+  for (const c of CAPEX_CATEGORIES) state[c.key] = c.default;
+}
+
+function renderPenInputs() {
+  const root = document.getElementById('pen-inputs');
+  if (!root) return;
+  root.innerHTML = '';
+
+  const f1 = document.createElement('div'); f1.className = 'field';
+  f1.innerHTML = `<label>Pen Width<span class="info">Standard Ridgeback widths</span></label>
+    <select id="pen_width" class="field-select">
+      ${PEN_WIDTH_OPTIONS.map(w => `<option value="${w}" ${w===state.pen_width?'selected':''}>${w} m</option>`).join('')}
+    </select><span class="units">m</span>`;
+  root.appendChild(f1);
+
+  const f2 = document.createElement('div'); f2.className = 'field';
+  f2.innerHTML = `<label>Pen Length<span class="info">Long axis of pen</span></label>
+    <input type="number" step="any" id="pen_length" value="${state.pen_length}"><span class="units">m</span>`;
+  root.appendChild(f2);
+
+  const f3 = document.createElement('div'); f3.className = 'field';
+  f3.innerHTML = `<label>Feed Lane Configuration<span class="info">Side = bunk one side. Centre = lane between two pens.</span></label>
+    <div class="field-radio-group">
+      <label><input type="radio" name="feed_config" value="side" ${state.feed_config==='side'?'checked':''}> Side</label>
+      <label><input type="radio" name="feed_config" value="centre" ${state.feed_config==='centre'?'checked':''}> Centre</label>
+    </div>`;
+  root.appendChild(f3);
+
+  const bothDisabled = +state.pen_width === 36;
+  if (bothDisabled && state.overhang === 'both') state.overhang = 'one';
+  const f5 = document.createElement('div'); f5.className = 'field';
+  f5.innerHTML = `<label>Roof Overhang<span class="info">4m roof extension. 36m pens: max one side.</span></label>
+    <div class="field-radio-group">
+      <label><input type="radio" name="overhang" value="none" ${state.overhang==='none'?'checked':''}> None</label>
+      <label><input type="radio" name="overhang" value="one"  ${state.overhang==='one'?'checked':''}> One side</label>
+      <label title="${bothDisabled?'Not available on 36m pens':''}" style="${bothDisabled?'opacity:0.45;cursor:not-allowed':''}"><input type="radio" name="overhang" value="both" ${state.overhang==='both'?'checked':''} ${bothDisabled?'disabled':''}> Both sides</label>
+    </div>`;
+  root.appendChild(f5);
+
+  const f4 = document.createElement('div'); f4.className = 'field';
+  f4.innerHTML = `<label>Coverage<span class="info">% of total SCU housed under cover</span></label>
+    <input type="number" step="any" min="0" max="100" id="coverage" value="${state.coverage}"><span class="units">%</span>`;
+  root.appendChild(f4);
+
+  document.getElementById('pen_width').addEventListener('change', e => {
+    state.pen_width = +e.target.value;
+    if (state.pen_width === 36 && state.overhang === 'both') state.overhang = 'one';
+    renderPenInputs();
+    recompute();
+  });
+  document.getElementById('pen_length').addEventListener('input', e => { state.pen_length = +e.target.value || 0; recompute(); });
+  document.getElementById('coverage').addEventListener('input', e => { state.coverage = +e.target.value || 0; recompute(); });
+  document.querySelectorAll('input[name="feed_config"]').forEach(r => {
+    r.addEventListener('change', e => { state.feed_config = e.target.value; recompute(); });
+  });
+  document.querySelectorAll('input[name="overhang"]').forEach(r => {
+    r.addEventListener('change', e => { state.overhang = e.target.value; recompute(); });
+  });
+}
+
+function renderCapexInputs() {
+  const tbody = document.getElementById('capex-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  for (const c of CAPEX_CATEGORIES) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${c.label}</td>
+      <td><input type="number" step="any" id="${c.key}" value="${state[c.key]}"></td>
+      <td class="cap-per-scu">—</td>
+      <td class="cap-pct">—</td>`;
+    tbody.appendChild(tr);
+    tr.querySelector('input').addEventListener('input', e => {
+      state[c.key] = +e.target.value || 0;
+      recompute();
+    });
+  }
+  const totalTr = document.createElement('tr');
+  totalTr.className = 'total-row';
+  totalTr.id = 'capex-total-row';
+  totalTr.innerHTML = `<td>Total CAPEX</td>
+    <td id="capex-total-cell">—</td>
+    <td id="capex-total-perscu">—</td>
+    <td>100%</td>`;
+  tbody.appendChild(totalTr);
+}
+
+function renderPenLayout(p) {
+  const sum = document.getElementById('pen-summary');
+  if (!sum) return;
+  const ohLabel = p.overhang === 'none' ? 'no overhang' : p.overhang === 'one' ? '4m one side' : '4m both sides';
+  sum.innerHTML = `
+    <div class="item"><div class="label">SCU per pen</div><div class="val">${Math.round(p.scuPerPen).toLocaleString('en-AU')}</div><div class="sub">${p.penArea.toLocaleString('en-AU')} m² @ ${p.density} m²/SCU</div></div>
+    <div class="item"><div class="label">Pen quantity</div><div class="val">${p.penQty}${p.hasHospital ? ' + 1 spare' : ''}</div><div class="sub">covers ${Math.round(p.scuRequired).toLocaleString('en-AU')} SCU (${p.coverage}%)</div></div>
+    <div class="item"><div class="label">Bunk length</div><div class="val">${p.bunkLM.toLocaleString('en-AU')} m</div><div class="sub">${p.sides === 2 ? 'Two-sided (centre feed)' : 'One-sided (side feed)'}</div></div>
+    <div class="item"><div class="label">Total roof area</div><div class="val">${Math.round(p.totalRoofM2).toLocaleString('en-AU')} m²</div><div class="sub">${p.buildingLen}m × ${p.buildingWidth}m, ${ohLabel}</div></div>
+  `;
+  document.getElementById('pen-svg-wrap').innerHTML = renderPenSchematic(p);
+}
+
+function renderPenSchematic(p) {
+  if (p.penQty <= 0) return '<div style="text-align:center;color:#9CA3AF;font-size:12px;padding:18px;">Enter pen dimensions to see schematic</div>';
+
+  const isSide   = p.feed_config === 'side';
+  const lane_m   = p.lane_m;
+  const topRow   = p.topRow;
+  const botRow   = p.botRow;
+
+  const overhang = p.overhang;
+  const ohOne    = overhang === 'one' || overhang === 'both';
+  const ohBoth   = overhang === 'both';
+  const ohW      = p.canopy;
+  const topOH    = ohBoth;
+  const botOH    = ohOne;
+
+  const penTopY  = topOH ? ohW : 0;
+  const buildingLen   = p.buildingLen;
+  const buildingWidth = p.buildingWidth;
+
+  const roofFill   = '#FAF8F2';
+  const roofStrk   = '#8B1A1A';
+  const penFill    = '#FFFFFF';
+  const penStrk    = '#9CA3AF';
+  const bunkCol    = '#8B1A1A';
+  const canopyFill = '#C9A961';
+  const laneFill   = '#C9A961';
+  const hospFill   = '#FEF3C7';
+  const hospStrk   = '#92400E';
+
+  const pad = 14;
+  const maxW = 720, maxH = 260;
+  const scale = Math.min((maxW - 2*pad) / buildingLen, (maxH - 2*pad) / buildingWidth);
+  const w = buildingLen * scale + 2*pad;
+  const h = buildingWidth * scale + 2*pad;
+
+  const X = m => pad + m * scale;
+  const Y = m => pad + m * scale;
+  const M = m => m * scale;
+
+  let svg = `<rect x="${pad - 3}" y="${pad - 3}" width="${buildingLen * scale + 6}" height="${buildingWidth * scale + 6}" fill="${roofFill}" stroke="${roofStrk}" stroke-width="2" rx="3"/>`;
+
+  const drawPenRow = (yTopMetres, count, startNum) => {
+    let out = '';
+    for (let i = 0; i < count; i++) {
+      const px = X(i * p.length);
+      const py = Y(yTopMetres);
+      const pw = M(p.length);
+      const ph = M(p.width);
+      out += `<rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="${penFill}" stroke="${penStrk}" stroke-width="0.8"/>`;
+      if (pw > 18) {
+        out += `<text x="${px + pw/2}" y="${py + ph/2}" text-anchor="middle" dominant-baseline="middle" font-size="${Math.max(8, Math.min(13, pw/6))}" fill="#6B7280" font-family="Segoe UI, sans-serif">${startNum + i}</text>`;
+      }
+    }
+    return out;
+  };
+
+  const drawHospital = (yTopMetres, colIdx) => {
+    const px = X(colIdx * p.length);
+    const py = Y(yTopMetres);
+    const pw = M(p.length);
+    const ph = M(p.width);
+    let out = `<rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="${hospFill}" stroke="${hospStrk}" stroke-width="1.2" stroke-dasharray="4,3"/>`;
+    const fontSize = Math.max(7, Math.min(11, pw/9));
+    out += `<text x="${px + pw/2}" y="${py + ph/2}" text-anchor="middle" dominant-baseline="middle" font-size="${fontSize}" font-weight="700" fill="${hospStrk}" font-family="Segoe UI, sans-serif">POSSIBLE</text>`;
+    out += `<text x="${px + pw/2}" y="${py + ph/2 + fontSize + 2}" text-anchor="middle" dominant-baseline="middle" font-size="${fontSize}" font-weight="700" fill="${hospStrk}" font-family="Segoe UI, sans-serif">HOSPITAL?</text>`;
+    return out;
+  };
+
+  if (topOH) {
+    svg += `<rect x="${X(0)}" y="${Y(0)}" width="${M(buildingLen)}" height="${M(ohW)}" fill="${canopyFill}" fill-opacity="0.55" stroke="${canopyFill}" stroke-width="0.8"/>`;
+  }
+
+  if (isSide) {
+    svg += drawPenRow(penTopY, p.penQty, 1);
+    const bunkY = penTopY + p.width;
+    svg += `<line x1="${X(0)}" y1="${Y(bunkY)}" x2="${X(buildingLen)}" y2="${Y(bunkY)}" stroke="${bunkCol}" stroke-width="2.6"/>`;
+    if (botOH) {
+      svg += `<rect x="${X(0)}" y="${Y(bunkY)}" width="${M(buildingLen)}" height="${M(ohW)}" fill="${canopyFill}" fill-opacity="0.55" stroke="${canopyFill}" stroke-width="0.8"/>`;
+    }
+  } else {
+    const yTopRow = penTopY;
+    const yLane   = yTopRow + p.width;
+    const yBotRow = yLane + lane_m;
+
+    svg += drawPenRow(yTopRow, topRow, 1);
+    svg += `<line x1="${X(0)}" y1="${Y(yLane)}" x2="${X(topRow * p.length)}" y2="${Y(yLane)}" stroke="${bunkCol}" stroke-width="2.6"/>`;
+    svg += `<rect x="${X(0)}" y="${Y(yLane)}" width="${M(buildingLen)}" height="${M(lane_m)}" fill="${laneFill}" fill-opacity="0.55" stroke="${laneFill}" stroke-width="0.8"/>`;
+    const bunkBotEnd = Math.max(botRow, p.hasHospital ? botRow + 1 : botRow) * p.length;
+    svg += `<line x1="${X(0)}" y1="${Y(yBotRow)}" x2="${X(bunkBotEnd)}" y2="${Y(yBotRow)}" stroke="${bunkCol}" stroke-width="2.6"/>`;
+    svg += drawPenRow(yBotRow, botRow, topRow + 1);
+    if (p.hasHospital) {
+      svg += drawHospital(yBotRow, p.hospitalCol);
+    }
+    if (botOH) {
+      svg += `<rect x="${X(0)}" y="${Y(yBotRow + p.width)}" width="${M(buildingLen)}" height="${M(ohW)}" fill="${canopyFill}" fill-opacity="0.55" stroke="${canopyFill}" stroke-width="0.8"/>`;
+    }
+  }
+
+  const labels = `
+    <g font-size="9" font-family="Segoe UI, sans-serif" fill="#6B7280">
+      <text x="${pad + M(buildingLen)/2}" y="${h + 12}" text-anchor="middle">${Math.round(buildingLen).toLocaleString('en-AU')} m long</text>
+      <text x="6" y="${pad + M(buildingWidth)/2}" text-anchor="middle" transform="rotate(-90, 6, ${pad + M(buildingWidth)/2})">${Math.round(buildingWidth)} m wide</text>
+    </g>
+  `;
+
+  const ohLabel = overhang === 'none'
+    ? 'no overhang'
+    : overhang === 'one'
+      ? `${ohW}m overhang one side`
+      : `${ohW}m overhangs both sides`;
+  const legendY = h + 22;
+  let legend = `
+    <g font-size="10" font-family="Segoe UI, sans-serif" fill="#6B7280">
+      <rect x="0" y="${legendY}" width="14" height="10" fill="${penFill}" stroke="${penStrk}"/>
+      <text x="20" y="${legendY + 8}">Pen (${p.width}m × ${p.length}m)</text>
+      <line x1="160" y1="${legendY + 5}" x2="180" y2="${legendY + 5}" stroke="${bunkCol}" stroke-width="2.6"/>
+      <text x="186" y="${legendY + 8}">Bunk</text>
+      ${(ohOne || !isSide) ? `<rect x="240" y="${legendY}" width="14" height="10" fill="${canopyFill}" fill-opacity="0.55" stroke="${canopyFill}"/>
+        <text x="260" y="${legendY + 8}">${isSide ? ohLabel : `${lane_m}m centre lane / ${ohLabel}`}</text>` : `<text x="240" y="${legendY + 8}">${ohLabel}</text>`}
+      <rect x="${(ohOne || !isSide) ? 470 : 380}" y="${legendY}" width="14" height="10" fill="${roofFill}" stroke="${roofStrk}" stroke-width="1.5"/>
+      <text x="${(ohOne || !isSide) ? 490 : 400}" y="${legendY + 8}">One continuous roof</text>
+      ${p.hasHospital ? `<rect x="0" y="${legendY + 16}" width="14" height="10" fill="${hospFill}" stroke="${hospStrk}" stroke-dasharray="3,2"/>
+        <text x="20" y="${legendY + 24}">Spare slot — possible hospital pen</text>` : ''}
+    </g>
+  `;
+
+  const totalH = h + 40 + (p.hasHospital ? 16 : 0);
+  return `<svg viewBox="0 0 ${Math.max(w, 600)} ${totalH}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Pen layout schematic">${svg}${labels}${legend}</svg>`;
+}
+
+function renderCapexBreakdown(c, results) {
+  const rows = document.querySelectorAll('#capex-body tr');
+  const scu = +state.scu || 0;
+  const annual = (results && results.total) ? results.total.diff : 0;
+  CAPEX_CATEGORIES.forEach((cat, i) => {
+    const tr = rows[i]; if (!tr) return;
+    const amount = c.rows[i].amount;
+    const perSCU = scu > 0 ? amount / scu : 0;
+    const pct = c.total > 0 ? (amount / c.total * 100) : 0;
+    tr.querySelector('.cap-per-scu').textContent = scu > 0 ? '$' + Math.round(perSCU).toLocaleString('en-AU') : '—';
+    tr.querySelector('.cap-pct').textContent = c.total > 0 ? pct.toFixed(1) + '%' : '—';
+  });
+  document.getElementById('capex-total-cell').textContent = fmtMoney(c.total);
+  document.getElementById('capex-total-perscu').textContent = scu > 0 ? '$' + Math.round(c.perSCU).toLocaleString('en-AU') : '—';
+  document.getElementById('capex-detailed-total').textContent = fmtMoney(c.total);
+  const roof = state._penLayout ? state._penLayout.totalRoofM2 : 0;
+  const perM2 = roof > 0 ? c.total / roof : 0;
+  document.getElementById('capex-detailed-per-m2').textContent = roof > 0 ? `$${Math.round(perM2).toLocaleString('en-AU')}/m² · ${Math.round(roof).toLocaleString('en-AU')} m² roof` : '—';
+  document.getElementById('capex-detailed-payback').textContent = annual > 0 && c.total > 0 ? fmtYears(c.total / annual) : '—';
+}
+
+function buildPenLayoutPage(p, accentColor) {
+  if (!p) return [];
+  const fc = p.feed_config === 'centre' ? 'Centre feed lane (bunks both sides)' : 'Side feed (bunk one side)';
+  const ohText = p.overhang === 'none' ? 'No overhang' : p.overhang === 'one' ? '4m overhang (one side)' : '4m overhangs (both sides)';
+  return [
+    { text: 'Pen Layout & Schematic', fontSize: 22, bold: true, color: '#1F2937', margin: [0, 0, 0, 6] },
+    { text: 'Configuration of the covered pen footprint based on operation size, density and coverage.', fontSize: 10, color: '#6B7280', margin: [0, 0, 0, 16] },
+    {
+      table: {
+        widths: ['*', '*', '*', '*'],
+        body: [[
+          { stack: [
+            { text: 'PEN DIMENSIONS', fontSize: 8, color: '#9CA3AF', bold: true, characterSpacing: 1 },
+            { text: `${p.width}m × ${p.length}m`, fontSize: 14, bold: true, color: accentColor, margin: [0, 4, 0, 0] },
+            { text: `${p.penArea.toLocaleString('en-AU')} m² floor`, fontSize: 9, color: '#9CA3AF', margin: [0, 2, 0, 0] }
+          ], margin: [10, 12, 10, 12], fillColor: '#F9FAFB' },
+          { stack: [
+            { text: 'SCU PER PEN', fontSize: 8, color: '#9CA3AF', bold: true, characterSpacing: 1 },
+            { text: Math.round(p.scuPerPen).toLocaleString('en-AU'), fontSize: 14, bold: true, color: '#1F2937', margin: [0, 4, 0, 0] },
+            { text: `@ ${p.density} m²/SCU`, fontSize: 9, color: '#9CA3AF', margin: [0, 2, 0, 0] }
+          ], margin: [10, 12, 10, 12], fillColor: '#F9FAFB' },
+          { stack: [
+            { text: 'PEN QUANTITY', fontSize: 8, color: '#9CA3AF', bold: true, characterSpacing: 1 },
+            { text: String(p.penQty) + (p.hasHospital ? ' + 1 spare' : ''), fontSize: 14, bold: true, color: '#1F2937', margin: [0, 4, 0, 0] },
+            { text: `${Math.round(p.scuRequired).toLocaleString('en-AU')} SCU (${p.coverage}%)`, fontSize: 9, color: '#9CA3AF', margin: [0, 2, 0, 0] }
+          ], margin: [10, 12, 10, 12], fillColor: '#F9FAFB' },
+          { stack: [
+            { text: 'TOTAL ROOF', fontSize: 8, color: '#9CA3AF', bold: true, characterSpacing: 1 },
+            { text: `${Math.round(p.totalRoofM2).toLocaleString('en-AU')} m²`, fontSize: 14, bold: true, color: '#1F2937', margin: [0, 4, 0, 0] },
+            { text: `${p.bunkLM.toLocaleString('en-AU')} m bunk`, fontSize: 9, color: '#9CA3AF', margin: [0, 2, 0, 0] }
+          ], margin: [10, 12, 10, 12], fillColor: '#F9FAFB' }
+        ]]
+      },
+      layout: 'noBorders'
+    },
+    { text: 'Configuration', fontSize: 13, bold: true, color: '#1F2937', margin: [0, 22, 0, 8] },
+    {
+      table: {
+        widths: ['*', 'auto'],
+        body: [
+          [{ text: 'Pen width', fontSize: 10, color: '#6B7280' }, { text: `${p.width} m`, fontSize: 10, alignment: 'right', bold: true }],
+          [{ text: 'Pen length', fontSize: 10, color: '#6B7280' }, { text: `${p.length} m`, fontSize: 10, alignment: 'right', bold: true }],
+          [{ text: 'Feed lane configuration', fontSize: 10, color: '#6B7280' }, { text: fc, fontSize: 10, alignment: 'right', bold: true }],
+          [{ text: 'Roof overhang', fontSize: 10, color: '#6B7280' }, { text: ohText, fontSize: 10, alignment: 'right', bold: true }],
+          [{ text: 'Coverage of total SCU', fontSize: 10, color: '#6B7280' }, { text: `${p.coverage}%`, fontSize: 10, alignment: 'right', bold: true }],
+          [{ text: 'Total bunk length', fontSize: 10, color: '#6B7280' }, { text: `${p.bunkLM.toLocaleString('en-AU')} m`, fontSize: 10, alignment: 'right', bold: true }],
+          ...(p.hasHospital ? [[{ text: 'Spare slot', fontSize: 10, color: '#6B7280' }, { text: 'Possible hospital pen (odd pen count)', fontSize: 10, alignment: 'right', bold: true, color: '#92400E' }]] : []),
+        ]
+      },
+      layout: lightLayout()
+    },
+    { text: 'Schematic', fontSize: 13, bold: true, color: '#1F2937', margin: [0, 22, 0, 8] },
+    { svg: renderPenSchematic(p), width: 480, alignment: 'center' },
+    { text: `Top-down view. ${p.penQty} pen${p.penQty === 1 ? '' : 's'} of ${p.width}m × ${p.length}m under one continuous roof, drawn to relative scale.`, fontSize: 9, color: '#9CA3AF', alignment: 'center', margin: [0, 6, 0, 0] },
+    { text: '', pageBreak: 'after' },
+  ];
+}
+
+function buildCapexBreakdownPage(c, p, results, accentColor) {
+  if (!c) return [];
+  const annual = (results && results.total) ? results.total.diff : 0;
+  const fmt = n => fmtMoney(n);
+  const roofM2 = p ? p.totalRoofM2 : 0;
+  const perM2 = roofM2 > 0 ? c.total / roofM2 : 0;
+  const rows = c.rows.map(r => {
+    const perSCU = (state.scu > 0) ? r.amount / state.scu : 0;
+    const pct = c.total > 0 ? r.amount / c.total * 100 : 0;
+    return [
+      { text: r.label, fontSize: 9 },
+      { text: fmt(r.amount), fontSize: 9, alignment: 'right' },
+      { text: state.scu > 0 ? '$' + Math.round(perSCU).toLocaleString('en-AU') : '—', fontSize: 9, alignment: 'right', color: '#6B7280' },
+      { text: c.total > 0 ? pct.toFixed(1) + '%' : '—', fontSize: 9, alignment: 'right', color: '#6B7280' },
+    ];
+  });
+  const totalRow = [
+    { text: 'TOTAL CAPEX', fillColor: '#2C3E50', color: '#fff', bold: true, fontSize: 10 },
+    { text: fmt(c.total), fillColor: '#2C3E50', color: '#fff', bold: true, fontSize: 10, alignment: 'right' },
+    { text: state.scu > 0 ? '$' + Math.round(c.perSCU).toLocaleString('en-AU') : '—', fillColor: '#2C3E50', color: '#fff', bold: true, fontSize: 10, alignment: 'right' },
+    { text: '100.0%', fillColor: '#2C3E50', color: '#fff', bold: true, fontSize: 10, alignment: 'right' }
+  ];
+  return [
+    { text: 'CAPEX Breakdown', fontSize: 22, bold: true, color: '#1F2937', margin: [0, 0, 0, 6] },
+    { text: 'Detailed cost build-up by category. Replaces the $/m² range when populated.', fontSize: 10, color: '#6B7280', margin: [0, 0, 0, 14] },
+    {
+      table: {
+        headerRows: 1,
+        widths: ['*', 90, 80, 60],
+        body: [
+          [
+            { text: 'Category', fillColor: '#F3F4F6', bold: true, fontSize: 9, color: '#374151' },
+            { text: 'Lump Sum', fillColor: '#F3F4F6', bold: true, fontSize: 9, color: '#374151', alignment: 'right' },
+            { text: 'Per SCU', fillColor: '#F3F4F6', bold: true, fontSize: 9, color: '#374151', alignment: 'right' },
+            { text: '% of Total', fillColor: '#F3F4F6', bold: true, fontSize: 9, color: '#374151', alignment: 'right' }
+          ],
+          ...rows,
+          totalRow
+        ]
+      },
+      layout: lightLayout()
+    },
+    { text: 'Detailed Payback', fontSize: 13, bold: true, color: '#1F2937', margin: [0, 22, 0, 8] },
+    {
+      table: {
+        widths: ['*', 'auto'],
+        body: [
+          [{ text: 'Total CAPEX (sum of categories)', fontSize: 10, color: '#6B7280' }, { text: fmt(c.total), fontSize: 10, alignment: 'right', bold: true }],
+          [{ text: 'Total covered roof area', fontSize: 10, color: '#6B7280' }, { text: roofM2 > 0 ? Math.round(roofM2).toLocaleString('en-AU') + ' m²' : '—', fontSize: 10, alignment: 'right', bold: true }],
+          [{ text: 'Effective rate per m² of roof', fontSize: 10, color: '#6B7280' }, { text: roofM2 > 0 ? '$' + Math.round(perM2).toLocaleString('en-AU') + '/m²' : '—', fontSize: 10, alignment: 'right', bold: true }],
+          [{ text: 'Annual benefit', fontSize: 10, color: '#6B7280' }, { text: fmt(annual), fontSize: 10, alignment: 'right', bold: true }],
+          [{ text: 'Payback (Total ÷ annual)', fontSize: 11, color: '#1F2937', bold: true, fillColor: '#F9FAFB' }, { text: (annual > 0 && c.total > 0) ? fmtYears(c.total / annual) : '—', fontSize: 11, alignment: 'right', bold: true, color: accentColor, fillColor: '#F9FAFB' }],
+        ]
+      },
+      layout: lightLayout()
+    },
+    { text: 'Notes', fontSize: 12, bold: true, color: '#1F2937', margin: [0, 22, 0, 6] },
+    { text: 'CAPEX figures in this breakdown are placeholders for illustration and should be replaced with quoted lump sums for the specific project. Excluded: cattle, working capital, financing costs, and ongoing operational expenditure.', fontSize: 9, color: '#4B5563', lineHeight: 1.4 },
+    { text: '', pageBreak: 'after' },
+  ];
+}
+
+
+function computeAll(v) {
+  const out = {};
+  out.mortality = (() => { const trad = v.heat_events*(v.mort_trad/1000)*v.scu*v.value_scu; const ridge = v.heat_events*(v.mort_ridge/1000)*v.scu*v.value_scu; return { label:'Mortality', trad, ridge, diff: trad-ridge }; })();
+  out.morbidity = (() => { const adgL = v.sick_days*v.daily_adg_loss*v.live_weight_price; const t = v.vet_cost+v.med_cost+adgL; const trad = v.cycles*(v.morb_trad/100)*v.scu*t; const ridge = v.cycles*(v.morb_ridge/100)*v.scu*t; return { label:'Morbidity', trad, ridge, diff: trad-ridge }; })();
+  out.dag = (() => { const trad = v.cycles*(v.dag_trad/100)*v.scu*v.dag_penalty; const ridge = v.cycles*(v.dag_ridge/100)*v.scu*v.dag_penalty; return { label:'Dag Loading', trad, ridge, diff: trad-ridge }; })();
+  out.feed_wastage = (() => { const ton = v.feed_per_day*v.scu/1000; const trad = v.rain_days*(v.wastage_trad/100)*ton*v.feed_cost; const ridge = v.rain_days*(v.wastage_ridge/100)*ton*v.feed_cost; return { label:'Feed Wastage', trad, ridge, diff: trad-ridge }; })();
+  out.adg = (() => { const trad = v.cycles*v.scu*v.days_on_feed*v.adg_trad*v.live_weight_price; const ridge = v.cycles*v.scu*v.days_on_feed*v.adg_ridge*v.live_weight_price; return { label:'ADG (extra weight gain)', trad, ridge, diff: ridge-trad }; })();
+  out.quality = (() => { const ridge = v.cycles*v.scu*v.days_on_feed*v.adg_ridge*v.delta_quality; return { label:'Carcass Quality', trad:0, ridge, diff: ridge }; })();
+  out.consistency = (() => { const trad = v.heat_events*v.days_affected_heat*v.scu*v.adg_reduction_heat*v.live_weight_price; return { label:'Consistency (heat ADG)', trad, ridge:0, diff: trad }; })();
+  out.staff = (() => { const trad = (v.scu/1000)*v.staff_per_1000_trad*v.salary; const ridge = (v.scu/1000)*v.staff_per_1000_ridge*v.salary; return { label:'Staff Productivity', trad, ridge, diff: trad-ridge }; })();
+  out.cleaning = (() => { const trad = v.scu*v.density_trad*v.cleaning_cost_m2*v.cleans_trad; const ridge = v.scu*v.density_ridge*v.cleaning_cost_m2*v.cleans_ridge; return { label:'Pen Cleaning', trad, ridge, diff: trad-ridge }; })();
+  out.bedding = (() => { const trad = v.scu*v.bedding_trad; const ridge = v.scu*v.bedding_ridge; return { label:'Bedding System', trad, ridge, diff: trad-ridge }; })();
+  out.manure = (() => { const trad = v.scu*v.manure_trad; const ridge = v.scu*v.manure_ridge; return { label:'Manure Fertiliser', trad, ridge, diff: ridge-trad }; })();
+  out.water_usage = (() => { const tML = (v.scu*v.water_consumption*365)/1000000; const rML = tML*(1-v.water_reduction); const trad = tML*v.water_cost; const ridge = rML*v.water_cost; return { label:'Water Consumption', trad, ridge, diff: trad-ridge }; })();
+  out.water_access = (() => { const roof = v.scu*v.density_ridge; const hML = (roof/1000000)*v.rainfall; const ridge = hML*v.water_cost; return { label:'Water Harvest', trad:0, ridge, diff: ridge }; })();
+  let totalAnnual = 0;
+  for (const k in out) totalAnnual += out[k].diff;
+  out.total = { label: 'Total Annual Benefit', diff: totalAnnual };
+  const totalRoofM2 = v.scu * v.density_ridge;
+  out.capex = { low: totalRoofM2*CONFIG.capexLowPerM2, high: totalRoofM2*CONFIG.capexHighPerM2 };
+  out.payback = { low: totalAnnual>0 ? out.capex.low/totalAnnual : null, high: totalAnnual>0 ? out.capex.high/totalAnnual : null };
+  out._cycles = v.cycles;
+  return out;
+}
+
+const fmtMoney = n => {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  const sign = n < 0 ? '-' : '';
+  return sign + '$' + Math.abs(Math.round(n)).toLocaleString('en-AU');
+};
+const fmtYears = n => n === null || isNaN(n) ? '—' : n.toFixed(1) + ' yrs';
+
+const state = {};
+
+function applyBranding() {
+  document.body.dataset.brand = CONFIG.brand;
+  if (CONFIG.brand === 'generic') {
+    document.title = 'Covered Pen Feedlot ROI Calculator';
+    document.getElementById('logo-text').innerHTML = 'COVERED PEN';
+    document.getElementById('tagline-text').textContent = 'Feedlot ROI Calculator';
+    document.getElementById('hero-title').textContent = 'Calculate the upside of switching to covered pens';
+    document.getElementById('hero-subtitle').textContent = 'Enter your operation details below — results update instantly.';
+    document.getElementById('footer-brand').textContent = 'Covered Pen Feedlot ROI Calculator';
+    document.querySelector('.privacy').innerHTML = 'Information is handled in accordance with our <a href="https://www.entegra.com.au/privacy-policy/" target="_blank" rel="noopener">Privacy Policy</a>.';
+  }
+}
+
+function renderInputs() {
+  const root = document.getElementById('inputs-panel');
+  root.innerHTML = '';
+  for (const cat of INPUT_CATEGORIES) {
+    const wrap = document.createElement('div');
+    wrap.className = 'category';
+    wrap.innerHTML = `<h3>${cat.name}</h3>`;
+    for (const f of cat.fields) {
+      state[f.key] = f.default;
+      const row = document.createElement('div');
+      row.className = 'field';
+      row.innerHTML = `<label title="${f.info}">${f.label}<span class="info">${f.info}</span></label><input type="number" step="any" id="in_${f.key}" value="${f.default}"><span class="units">${f.units}</span>`;
+      wrap.appendChild(row);
+    }
+    root.appendChild(wrap);
+  }
+  document.querySelectorAll('input[id^="in_"]').forEach(el => {
+    el.addEventListener('input', () => {
+      const key = el.id.replace('in_', '');
+      const val = parseFloat(el.value);
+      state[key] = isNaN(val) ? 0 : val;
+      recompute();
+    });
+  });
+}
+
+function renderResults(r) {
+  const body = document.getElementById('results-body');
+  body.innerHTML = '';
+  const keys = ['mortality','morbidity','dag','feed_wastage','adg','quality','consistency','staff','cleaning','bedding','manure','water_usage','water_access'];
+  const cycles = r._cycles;
+  for (const k of keys) {
+    const row = r[k];
+    const annual = row.diff;
+    const cls = annual >= 0 ? 'pos' : 'neg';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${row.label}</td><td class="${cls}">${fmtMoney(annual)}</td><td class="${cls}">${fmtMoney(annual/cycles)}</td><td class="${cls}">${fmtMoney(annual/12)}</td><td class="${cls}">${fmtMoney(annual/365)}</td>`;
+    body.appendChild(tr);
+  }
+  const total = r.total.diff;
+  const tr = document.createElement('tr');
+  tr.className = 'total-row';
+  tr.innerHTML = `<td>Total Annual Benefit</td><td>${fmtMoney(total)}</td><td>${fmtMoney(total/cycles)}</td><td>${fmtMoney(total/12)}</td><td>${fmtMoney(total/365)}</td>`;
+  body.appendChild(tr);
+  document.getElementById('capex-range').textContent = `${fmtMoney(r.capex.low)} – ${fmtMoney(r.capex.high)}`;
+  document.getElementById('payback-range').textContent = r.payback.low ? `${fmtYears(r.payback.low)} – ${fmtYears(r.payback.high)}` : '—';
+}
+
+function recompute() {
+  const r = computeAll(state);
+  renderResults(r);
+  state._results = r;
+  // v1.1
+  const penLayout = computePenLayout(state);
+  const capex = computeCapexBreakdown(state);
+  state._penLayout = penLayout;
+  state._capex11   = capex;
+  renderPenLayout(penLayout);
+  renderCapexBreakdown(capex, r);
+}
+
+function resetDefaults() {
+  for (const cat of INPUT_CATEGORIES) {
+    for (const f of cat.fields) {
+      state[f.key] = f.default;
+      const el = document.getElementById('in_' + f.key);
+      if (el) el.value = f.default;
+    }
+  }
+  // v1.1
+  seedV11Defaults();
+  renderPenInputs();
+  renderCapexInputs();
+  recompute();
+}
+
+function openModal() { document.getElementById('email-modal').classList.add('active'); }
+function closeModal() {
+  document.getElementById('email-modal').classList.remove('active');
+  document.getElementById('modal-error').style.display = 'none';
+}
+
+async function submitWebhook(contact) {
+  if (!CONFIG.webhookUrl) return;
+  const inputsClean = { ...state };
+  delete inputsClean._results;
+  const payload = {
+    timestamp: new Date().toISOString(),
+    brand: CONFIG.brand,
+    version: '1.1-draft',
+    name: contact.name,
+    email: contact.email,
+    company: contact.company,
+    total_annual: state._results?.total?.diff ?? 0,
+    capex_low: state._results?.capex?.low ?? 0,
+    capex_high: state._results?.capex?.high ?? 0,
+    payback_low: state._results?.payback?.low ?? 0,
+    payback_high: state._results?.payback?.high ?? 0,
+    pen_width: state.pen_width,
+    pen_length: state.pen_length,
+    feed_config: state.feed_config,
+    overhang: state.overhang,
+    coverage_pct: state.coverage,
+    pen_qty: state._penLayout?.penQty ?? 0,
+    has_hospital_slot: state._penLayout?.hasHospital ?? false,
+    scu_per_pen: Math.round(state._penLayout?.scuPerPen ?? 0),
+    bunk_lm: state._penLayout?.bunkLM ?? 0,
+    total_roof_m2: Math.round(state._penLayout?.totalRoofM2 ?? 0),
+    capex_detailed_total: state._capex11?.total ?? 0,
+    capex_detailed_payback: (state._capex11?.total > 0 && state._results?.total?.diff > 0) ? state._capex11.total / state._results.total.diff : 0,
+    inputs_json: JSON.stringify(inputsClean),
+  };
+
+  try {
+    await fetch(CONFIG.webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  } catch (e) { /* silent */ }
+}
+
+const LOGO_DARK_B64 = 'iVBORw0KGgoAAAANSUhEUgAABtoAAATZCAYAAABac8AlAABKMElEQVR42uzd3XXbSLo27Htm9bn4RWBOBOJEYHYE5kRgdgRWR2A6gmZHYDqCLUfQdARDRbDpCF4qAn8HgLfVMiX+iEQBxHWtheVuUWSBT5WAKjxAVQIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADg/28PDgQAAAAABPlbrzBABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMAUYXaJTfiV9J8AAAAASUVORK5CYII=';
+
+function buildPdfDocDef(contact, results, inputs) {
+  const isRidge = CONFIG.brand === 'ridgeback';
+  const titleText = isRidge ? 'Ridgeback ROI Analysis' : 'Covered Pen Feedlot ROI Analysis';
+  const productLong = isRidge ? 'Ridgeback covered pen feedlot' : 'covered pen feedlot';
+  const date = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  const fmt = n => fmtMoney(n);
+  const fmtY = n => fmtYears(n);
+  const sign = n => n >= 0 ? '#059669' : '#DC2626';
+
+  // Build the 13-row breakdown
+  const breakdownKeys = ['mortality','morbidity','dag','feed_wastage','adg','quality','consistency','staff','cleaning','bedding','manure','water_usage','water_access'];
+  const typeMap = { mortality:'Cost saving', morbidity:'Cost saving', dag:'Cost saving', feed_wastage:'Cost saving', adg:'Income gain', quality:'Income gain', consistency:'Cost saving', staff:'Cost saving', cleaning:'Cost saving', bedding:'Cost', manure:'Income gain', water_usage:'Cost saving', water_access:'Income gain' };
+  const breakdownRows = breakdownKeys.map(k => {
+    const r = results[k];
+    const annual = r.diff;
+    return [
+      { text: r.label, fontSize: 9 },
+      { text: fmt(annual), fontSize: 9, alignment: 'right', color: sign(annual) },
+      { text: fmt(annual / results._cycles), fontSize: 9, alignment: 'right', color: sign(annual) },
+      { text: fmt(annual / 12), fontSize: 9, alignment: 'right', color: sign(annual) },
+      { text: fmt(annual / 365), fontSize: 9, alignment: 'right', color: sign(annual) },
+      { text: typeMap[k], fontSize: 8, alignment: 'right', color: '#6B7280' }
+    ];
+  });
+
+  const totalRow = [
+    { text: 'TOTAL ANNUAL BENEFIT', fillColor: '#2C3E50', color: '#fff', bold: true, fontSize: 10 },
+    { text: fmt(results.total.diff), fillColor: '#2C3E50', color: '#fff', bold: true, fontSize: 10, alignment: 'right' },
+    { text: fmt(results.total.diff / results._cycles), fillColor: '#2C3E50', color: '#fff', bold: true, fontSize: 10, alignment: 'right' },
+    { text: fmt(results.total.diff / 12), fillColor: '#2C3E50', color: '#fff', bold: true, fontSize: 10, alignment: 'right' },
+    { text: fmt(results.total.diff / 365), fillColor: '#2C3E50', color: '#fff', bold: true, fontSize: 10, alignment: 'right' },
+    { text: '', fillColor: '#2C3E50' }
+  ];
+
+  // Inputs by category for page 5
+  const inputCategories = INPUT_CATEGORIES.map(cat => {
+    return [
+      { text: cat.name.toUpperCase(), bold: true, fontSize: 10, color: isRidge ? '#8B1A1A' : '#1E3A8A', margin: [0, 10, 0, 4] },
+      {
+        table: {
+          widths: ['*', 'auto', 60],
+          body: cat.fields.map(f => [
+            { text: f.label, fontSize: 9, color: '#374151' },
+            { text: formatInputValue(inputs[f.key], f.units), fontSize: 9, alignment: 'right', bold: true },
+            { text: f.units, fontSize: 8, color: '#9CA3AF', alignment: 'left' }
+          ])
+        },
+        layout: lightLayout()
+      }
+    ];
+  }).flat();
+
+  // Cover page accent color
+  const accentColor = isRidge ? '#8B1A1A' : '#1E3A8A';
+
+  const docDef = {
+    pageSize: 'A4',
+    pageMargins: [50, 75, 50, 55],
+
+    header: function(currentPage) {
+      if (currentPage === 1) return null;
+      return {
+        margin: [50, 30, 50, 0],
+        columns: [
+          isRidge
+            ? { image: 'logo', width: 90, margin: [0, 0, 0, 0] }
+            : { text: 'COVERED PEN', fontSize: 11, bold: true, color: '#2C3E50', margin: [0, 4, 0, 0] },
+          { text: titleText, alignment: 'right', fontSize: 9, color: '#9CA3AF', margin: [0, 8, 0, 0] }
+        ]
+      };
+    },
+
+    footer: function(currentPage, pageCount) {
+      if (currentPage === 1) return null;
+      const contactLine = isRidge ? '1300 296 206  ·  theridgeback.com.au  ·  entegra.com.au' : '';
+      return {
+        margin: [50, 0, 50, 25],
+        columns: [
+          { text: 'Page ' + currentPage + ' of ' + pageCount, fontSize: 8, color: '#9CA3AF' },
+          { text: date, alignment: 'center', fontSize: 8, color: '#9CA3AF' },
+          { text: contactLine, alignment: 'right', fontSize: 8, color: '#9CA3AF' }
+        ]
+      };
+    },
+
+    content: [
+      // ---------- COVER ----------
+      {
+        canvas: [
+          { type: 'rect', x: -50, y: -75, w: 595, h: 130, color: accentColor }
+        ]
+      },
+      isRidge
+        ? { image: 'logo', width: 320, alignment: 'center', margin: [0, -55, 0, 50] }
+        : { stack: [
+            { text: 'COVERED PEN', fontSize: 38, bold: true, color: '#fff', alignment: 'center', margin: [0, -50, 0, 4], characterSpacing: 4 },
+            { text: 'FEEDLOT', fontSize: 18, color: '#fff', alignment: 'center', characterSpacing: 6, margin: [0, 0, 0, 50] }
+          ]},
+      { text: 'ROI Analysis Report', fontSize: 28, bold: true, color: '#1F2937', alignment: 'center', margin: [0, 30, 0, 8] },
+      { text: 'Comparison of Traditional vs ' + (isRidge ? 'Ridgeback Covered Pen' : 'Covered Pen') + ' Feedlot Systems', fontSize: 12, color: '#6B7280', alignment: 'center', margin: [0, 0, 0, 30] },
+      {
+        table: {
+          widths: [110, '*'],
+          body: [
+            [{ text: 'PREPARED FOR', bold: true, color: '#9CA3AF', fontSize: 9, characterSpacing: 1 }, { text: contact.name, fontSize: 13, color: '#1F2937', bold: true }],
+            ...(contact.company ? [[{ text: 'COMPANY', bold: true, color: '#9CA3AF', fontSize: 9, characterSpacing: 1 }, { text: contact.company, fontSize: 12, color: '#1F2937' }]] : []),
+            [{ text: 'DATE', bold: true, color: '#9CA3AF', fontSize: 9, characterSpacing: 1 }, { text: date, fontSize: 12, color: '#1F2937' }],
+          ]
+        },
+        layout: lightLayout(),
+        margin: [70, 20, 70, 0]
+      },
+      { text: 'CONFIDENTIAL', fontSize: 9, color: '#9CA3AF', alignment: 'center', characterSpacing: 4, margin: [0, 50, 0, 0] },
+      { text: '', pageBreak: 'after' },
+
+      // ---------- PAGE 2: EXECUTIVE SUMMARY ----------
+      { text: 'Executive Summary', fontSize: 22, bold: true, color: '#1F2937', margin: [0, 0, 0, 6] },
+      { text: 'This report quantifies the projected financial benefit of operating a ' + productLong + ' compared with a traditional open-pen feedlot, based on the operational parameters provided by ' + contact.name + (contact.company ? ' (' + contact.company + ')' : '') + '.', fontSize: 10, color: '#374151', lineHeight: 1.4, margin: [0, 0, 0, 20] },
+
+      // Big metrics row
+      {
+        table: {
+          widths: ['*', '*', '*'],
+          body: [[
+            { stack: [
+              { text: 'TOTAL ANNUAL BENEFIT', fontSize: 8, color: '#9CA3AF', bold: true, characterSpacing: 1 },
+              { text: fmt(results.total.diff), fontSize: 22, bold: true, color: accentColor, margin: [0, 4, 0, 0] },
+              { text: 'per year', fontSize: 9, color: '#9CA3AF', margin: [0, 2, 0, 0] }
+            ], margin: [10, 14, 10, 14], fillColor: '#F9FAFB' },
+            { stack: [
+              { text: 'INVESTMENT (CAPEX)', fontSize: 8, color: '#9CA3AF', bold: true, characterSpacing: 1 },
+              { text: fmt(results.capex.low) + ' – ' + fmt(results.capex.high), fontSize: 13, bold: true, color: '#1F2937', margin: [0, 4, 0, 0] },
+              { text: 'Range based on $' + CONFIG.capexLowPerM2 + '–$' + CONFIG.capexHighPerM2 + '/m²', fontSize: 9, color: '#9CA3AF', margin: [0, 2, 0, 0] }
+            ], margin: [10, 14, 10, 14], fillColor: '#F9FAFB' },
+            { stack: [
+              { text: 'PAYBACK PERIOD', fontSize: 8, color: '#9CA3AF', bold: true, characterSpacing: 1 },
+              { text: fmtY(results.payback.low) + ' – ' + fmtY(results.payback.high), fontSize: 16, bold: true, color: '#1F2937', margin: [0, 4, 0, 0] },
+              { text: 'Years to recoup investment', fontSize: 9, color: '#9CA3AF', margin: [0, 2, 0, 0] }
+            ], margin: [10, 14, 10, 14], fillColor: '#F9FAFB' }
+          ]]
+        },
+        layout: 'noBorders'
+      },
+
+      { text: 'Operation Overview', fontSize: 14, bold: true, color: '#1F2937', margin: [0, 28, 0, 8] },
+      {
+        table: {
+          widths: ['*', 'auto', '*', 'auto'],
+          body: [
+            [{ text: 'Total head on feed (SCU)', fontSize: 10, color: '#6B7280' }, { text: inputs.scu.toLocaleString(), fontSize: 10, bold: true, alignment: 'right' },
+             { text: 'Cycles per year', fontSize: 10, color: '#6B7280' }, { text: inputs.cycles, fontSize: 10, bold: true, alignment: 'right' }],
+            [{ text: 'Days on feed per cycle', fontSize: 10, color: '#6B7280' }, { text: inputs.days_on_feed, fontSize: 10, bold: true, alignment: 'right' },
+             { text: 'Live weight price', fontSize: 10, color: '#6B7280' }, { text: '$' + inputs.live_weight_price + '/kg', fontSize: 10, bold: true, alignment: 'right' }],
+            [{ text: 'Density – Traditional', fontSize: 10, color: '#6B7280' }, { text: inputs.density_trad + ' m²/SCU', fontSize: 10, bold: true, alignment: 'right' },
+             { text: 'Density – ' + (isRidge ? 'Ridgeback' : 'Covered'), fontSize: 10, color: '#6B7280' }, { text: inputs.density_ridge + ' m²/SCU', fontSize: 10, bold: true, alignment: 'right' }],
+            [{ text: 'ADG – Traditional', fontSize: 10, color: '#6B7280' }, { text: inputs.adg_trad + ' kg/day', fontSize: 10, bold: true, alignment: 'right' },
+             { text: 'ADG – ' + (isRidge ? 'Ridgeback' : 'Covered'), fontSize: 10, color: '#6B7280' }, { text: inputs.adg_ridge + ' kg/day', fontSize: 10, bold: true, alignment: 'right' }],
+          ]
+        },
+        layout: lightLayout()
+      },
+
+      { text: 'Key Findings', fontSize: 14, bold: true, color: '#1F2937', margin: [0, 28, 0, 8] },
+      { ul: [
+        { text: 'The annual benefit of ' + fmt(results.total.diff) + ' is driven primarily by improved Average Daily Gain (' + fmt(results.adg.diff) + '), avoided heat-stress losses (mortality, morbidity, consistency = ' + fmt(results.mortality.diff + results.morbidity.diff + results.consistency.diff) + '), and operational efficiencies.', fontSize: 10 },
+        { text: 'Estimated CAPEX of ' + fmt(results.capex.low) + ' – ' + fmt(results.capex.high) + ' is recouped within ' + fmtY(results.payback.low) + ' – ' + fmtY(results.payback.high) + ' under the assumptions provided.', fontSize: 10 },
+        { text: 'Bedding represents an additional cost of ' + fmt(Math.abs(results.bedding.diff)) + ' per year for the ' + (isRidge ? 'Ridgeback' : 'covered') + ' system, which is included in the total benefit calculation.', fontSize: 10 },
+        { text: 'Water harvesting from the roof structure adds ' + fmt(results.water_access.diff) + ' annually, based on ' + inputs.rainfall + 'mm average rainfall.', fontSize: 10 }
+      ], margin: [0, 0, 0, 0], lineHeight: 1.4 },
+      { text: '', pageBreak: 'after' },
+
+      // ---------- PAGE 3: FINANCIAL BREAKDOWN ----------
+      { text: 'Annual Financial Breakdown', fontSize: 22, bold: true, color: '#1F2937', margin: [0, 0, 0, 6] },
+      { text: 'Differential between traditional and ' + (isRidge ? 'Ridgeback' : 'covered pen') + ' systems, by category.', fontSize: 10, color: '#6B7280', margin: [0, 0, 0, 14] },
+      {
+        table: {
+          headerRows: 1,
+          widths: ['*', 65, 60, 60, 55, 55],
+          body: [
+            [
+              { text: 'Category', fillColor: '#F3F4F6', bold: true, fontSize: 9, color: '#374151' },
+              { text: 'Annual', fillColor: '#F3F4F6', bold: true, fontSize: 9, color: '#374151', alignment: 'right' },
+              { text: 'Per Cycle', fillColor: '#F3F4F6', bold: true, fontSize: 9, color: '#374151', alignment: 'right' },
+              { text: 'Monthly', fillColor: '#F3F4F6', bold: true, fontSize: 9, color: '#374151', alignment: 'right' },
+              { text: 'Daily', fillColor: '#F3F4F6', bold: true, fontSize: 9, color: '#374151', alignment: 'right' },
+              { text: 'Type', fillColor: '#F3F4F6', bold: true, fontSize: 9, color: '#374151', alignment: 'right' }
+            ],
+            ...breakdownRows,
+            totalRow
+          ]
+        },
+        layout: lightLayout()
+      },
+
+      { text: 'Notes on Methodology', fontSize: 12, bold: true, color: '#1F2937', margin: [0, 24, 0, 6] },
+      { text: 'Cost-saving categories quantify expenses avoided in the ' + (isRidge ? 'Ridgeback' : 'covered pen') + ' system. Income gains reflect additional revenue (extra weight gain, quality premium, byproducts, water harvest). Bedding is shown as a cost item where ' + (isRidge ? 'Ridgeback' : 'covered pen') + ' bedding is more intensive than traditional. All figures derive directly from the input assumptions and are calculated using industry-standard formulas. For full formula detail, refer to the input assumption methodology documentation.', fontSize: 9, color: '#4B5563', lineHeight: 1.4 },
+      { text: '', pageBreak: 'after' },
+
+      // ---------- PAGE 4: INVESTMENT & PAYBACK ----------
+      { text: 'Investment & Payback Analysis', fontSize: 22, bold: true, color: '#1F2937', margin: [0, 0, 0, 6] },
+      { text: 'CAPEX is estimated based on covered pen area and a per-square-metre rate range reflecting standard to premium specifications.', fontSize: 10, color: '#6B7280', margin: [0, 0, 0, 16] },
+
+      { text: 'CAPEX Calculation', fontSize: 13, bold: true, color: '#1F2937', margin: [0, 0, 0, 8] },
+      {
+        table: {
+          widths: ['*', 'auto'],
+          body: [
+            [{ text: 'Total head on feed (SCU)', fontSize: 10, color: '#6B7280' }, { text: inputs.scu.toLocaleString(), fontSize: 10, alignment: 'right', bold: true }],
+            [{ text: '× Density (' + (isRidge ? 'Ridgeback' : 'Covered') + ')', fontSize: 10, color: '#6B7280' }, { text: inputs.density_ridge + ' m²/SCU', fontSize: 10, alignment: 'right', bold: true }],
+            [{ text: '= Total covered pen area', fontSize: 10, color: '#374151' }, { text: (inputs.scu * inputs.density_ridge).toLocaleString() + ' m²', fontSize: 10, alignment: 'right', bold: true }],
+            [{ text: '× Rate (low–high)', fontSize: 10, color: '#6B7280' }, { text: '$' + CONFIG.capexLowPerM2 + ' – $' + CONFIG.capexHighPerM2 + ' / m²', fontSize: 10, alignment: 'right', bold: true }],
+            [{ text: 'Total Investment (low)', fontSize: 11, color: '#1F2937', bold: true, fillColor: '#F9FAFB' }, { text: fmt(results.capex.low), fontSize: 11, alignment: 'right', bold: true, color: accentColor, fillColor: '#F9FAFB' }],
+            [{ text: 'Total Investment (high)', fontSize: 11, color: '#1F2937', bold: true, fillColor: '#F9FAFB' }, { text: fmt(results.capex.high), fontSize: 11, alignment: 'right', bold: true, color: accentColor, fillColor: '#F9FAFB' }],
+          ]
+        },
+        layout: lightLayout()
+      },
+
+      { text: 'Payback Calculation', fontSize: 13, bold: true, color: '#1F2937', margin: [0, 24, 0, 8] },
+      {
+        table: {
+          widths: ['*', 'auto'],
+          body: [
+            [{ text: 'Total annual benefit', fontSize: 10, color: '#6B7280' }, { text: fmt(results.total.diff), fontSize: 10, alignment: 'right', bold: true }],
+            [{ text: 'Investment (low) ÷ annual benefit', fontSize: 10, color: '#6B7280' }, { text: fmtY(results.payback.low), fontSize: 10, alignment: 'right', bold: true, color: accentColor }],
+            [{ text: 'Investment (high) ÷ annual benefit', fontSize: 10, color: '#6B7280' }, { text: fmtY(results.payback.high), fontSize: 10, alignment: 'right', bold: true, color: accentColor }],
+          ]
+        },
+        layout: lightLayout()
+      },
+
+      { text: 'CAPEX Notes', fontSize: 12, bold: true, color: '#1F2937', margin: [0, 24, 0, 6] },
+      { text: 'The CAPEX range reflects typical installations of the covered pen system. Items often included in the lump-sum CAPEX figure: permits and approvals, civil works and dam, barn structure, water reticulation, bunks and troughs, fences and gates, apron and turning circles, principal contractor margin, and contingency. Excluded: cattle, working capital, ongoing operational costs. CAPEX is independent of the operational parameters in this report, except as a multiplier on covered pen area.', fontSize: 9, color: '#4B5563', lineHeight: 1.4 },
+      { text: '', pageBreak: 'after' },
+
+      // ---------- v1.1 PAGE: PEN LAYOUT ----------
+      ...buildPenLayoutPage(state._penLayout, accentColor),
+
+      // ---------- v1.1 PAGE: CAPEX BREAKDOWN ----------
+      ...buildCapexBreakdownPage(state._capex11, state._penLayout, results, accentColor),
+
+      // ---------- PAGE 5: INPUT ASSUMPTIONS ----------
+      { text: 'Input Assumptions', fontSize: 22, bold: true, color: '#1F2937', margin: [0, 0, 0, 6] },
+      { text: 'All operational parameters used in this analysis. Modify on the calculator to model alternative scenarios.', fontSize: 10, color: '#6B7280', margin: [0, 0, 0, 6] },
+      ...inputCategories,
+      { text: '', pageBreak: 'after' },
+
+      // ---------- PAGE 6: DISCLAIMER ----------
+      { text: 'Disclaimer & Notes', fontSize: 22, bold: true, color: '#1F2937', margin: [0, 0, 0, 12] },
+      { text: 'Important', fontSize: 12, bold: true, color: '#1F2937', margin: [0, 0, 0, 6] },
+      { text: 'This ROI report is a projection generated from operational parameters supplied by the user. Results depend on assumptions that vary by site, climate, herd genetics, market conditions, and operational practice. Actual outcomes may differ, sometimes materially, from the figures presented here.', fontSize: 10, color: '#374151', lineHeight: 1.4, margin: [0, 0, 0, 8] },
+      { text: 'No representation or warranty is made as to the accuracy, completeness, or suitability of this report for any particular purpose. ' + (isRidge ? 'Entegra Signature Structures and Ridgeback' : 'The publisher') + ' disclaim liability for any decision made in reliance on this report. Independent verification by qualified financial, agricultural, and engineering professionals is strongly recommended before committing capital.', fontSize: 10, color: '#374151', lineHeight: 1.4, margin: [0, 0, 0, 16] },
+
+      { text: 'Use for Finance Applications', fontSize: 12, bold: true, color: '#1F2937', margin: [0, 0, 0, 6] },
+      { text: 'This document may be provided to financial institutions as part of a finance application. The figures are projections only; lenders should conduct their own due diligence including (where appropriate) site inspection, independent valuation of the proposed structure, and review of the operator\'s capability to deliver on the assumptions presented.', fontSize: 10, color: '#374151', lineHeight: 1.4, margin: [0, 0, 0, 16] },
+
+      ...(isRidge ? [
+        { text: 'About Ridgeback', fontSize: 12, bold: true, color: '#1F2937', margin: [0, 0, 0, 6] },
+        { text: 'Ridgeback is a covered pen feedlot system engineered by Entegra Signature Structures. It improves cattle performance, reduces mortality and morbidity from heat stress, and lowers the operational cost of feedlotting through engineered shelter, ventilation and bedding management.', fontSize: 10, color: '#374151', lineHeight: 1.4, margin: [0, 0, 0, 12] },
+        {
+          table: {
+            widths: ['auto', '*'],
+            body: [
+              [{ text: 'Phone', fontSize: 10, color: '#6B7280' }, { text: '1300 296 206', fontSize: 10, bold: true }],
+              [{ text: 'Web', fontSize: 10, color: '#6B7280' }, { text: 'www.theridgeback.com.au · www.entegra.com.au', fontSize: 10, bold: true }],
+              [{ text: 'Privacy', fontSize: 10, color: '#6B7280' }, { text: 'www.entegra.com.au/privacy-policy', fontSize: 10 }],
+            ]
+          },
+          layout: 'noBorders'
+        }
+      ] : [
+        { text: 'Privacy', fontSize: 12, bold: true, color: '#1F2937', margin: [0, 0, 0, 6] },
+        { text: 'Information is handled in accordance with our Privacy Policy: www.entegra.com.au/privacy-policy', fontSize: 10, color: '#374151' }
+      ])
+    ],
+
+    images: isRidge ? { logo: 'data:image/png;base64,' + LOGO_DARK_B64 } : {},
+
+    defaultStyle: { font: 'Roboto', fontSize: 10, lineHeight: 1.3 },
+
+    info: {
+      title: titleText + ' Report',
+      author: isRidge ? 'Entegra Signature Structures' : 'Covered Pen ROI',
+      subject: 'Return on Investment Analysis — Feedlot',
+      keywords: 'ROI, feedlot, ' + (isRidge ? 'Ridgeback' : 'covered pen') + ', cattle, CAPEX, payback'
+    }
+  };
+  return docDef;
+}
+
+function lightLayout() {
+  return {
+    hLineWidth: function(i, node) { return (i === 0 || i === node.table.body.length) ? 0.5 : 0.3; },
+    vLineWidth: function() { return 0; },
+    hLineColor: function() { return '#E5E7EB'; },
+    paddingLeft: function() { return 6; },
+    paddingRight: function() { return 6; },
+    paddingTop: function() { return 5; },
+    paddingBottom: function() { return 5; }
+  };
+}
+
+function formatInputValue(v, units) {
+  if (typeof v !== 'number') return v;
+  if (units === '$/kg' || units === '$/SCU' || units === '$/tonne' || units === '$/ML' || units === '$/m²' || units === '$/SCU/yr' || units === '$/staff/year' || units === '$/yr') {
+    return '$' + v.toLocaleString('en-AU');
+  }
+  if (units === '%' || units === 'fraction') {
+    return v.toLocaleString('en-AU');
+  }
+  return v.toLocaleString('en-AU');
+}
+
+function generatePDF(contact) {
+  const inputsClean = { ...state };
+  delete inputsClean._results;
+  const docDef = buildPdfDocDef(contact, state._results, inputsClean);
+  const fname = (CONFIG.brand === 'ridgeback' ? 'Ridgeback-ROI-Report' : 'Feedlot-ROI-Report') + '-' + (contact.name || 'Report').replace(/[^A-Za-z0-9]+/g, '-') + '.pdf';
+  pdfMake.createPdf(docDef).download(fname);
+}
+
+
+document.addEventListener('DOMContentLoaded', () => {
+  applyBranding();
+  renderInputs();
+  // v1.1: seed + render new panels before first recompute
+  seedV11Defaults();
+  renderPenInputs();
+  renderCapexInputs();
+  recompute();
+  document.getElementById('reset-btn').addEventListener('click', resetDefaults);
+  document.getElementById('pdf-btn').addEventListener('click', openModal);
+  document.getElementById('modal-cancel').addEventListener('click', closeModal);
+  document.getElementById('email-modal').addEventListener('click', e => {
+    if (e.target.id === 'email-modal') closeModal();
+  });
+  document.getElementById('modal-submit').addEventListener('click', async () => {
+    const name = document.getElementById('m-name').value.trim();
+    const email = document.getElementById('m-email').value.trim();
+    const company = document.getElementById('m-company').value.trim();
+    const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    if (!name || !emailValid) {
+      document.getElementById('modal-error').style.display = 'block';
+      return;
+    }
+    const btn = document.getElementById('modal-submit');
+    btn.textContent = 'Generating…';
+    btn.disabled = true;
+    await submitWebhook({ name, email, company });
+    generatePDF({ name, email, company });
+    setTimeout(() => {
+      btn.textContent = 'Download PDF';
+      btn.disabled = false;
+      closeModal();
+    }, 1200);
+  });
+});
+</script>
+</body>
+</html>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
