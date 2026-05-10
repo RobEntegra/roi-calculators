@@ -142,6 +142,21 @@
   .capex-payback .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.75; font-weight: 600; }
   .capex-payback .val { font-size: 18px; font-weight: 700; margin-top: 2px; }
   .capex-payback .sub { font-size: 10px; opacity: 0.7; margin-top: 1px; }
+  .rainfall-helper { padding: 2px 0 4px; }
+  .rainfall-btn { padding: 4px 10px; border: 1px solid var(--border-strong); background: #fff; border-radius: 4px; font-size: 12px; cursor: pointer; color: var(--brand-accent); font-family: inherit; }
+  .rainfall-btn:hover { background: var(--section-bg); border-color: var(--brand-primary); color: var(--brand-primary); }
+  .rainfall-modal { max-width: 520px; }
+  .rainfall-status { font-size: 13px; padding: 8px 0; min-height: 18px; }
+  .rainfall-status[data-type="loading"] { color: var(--brand-accent); }
+  .rainfall-status[data-type="error"]   { color: var(--negative); }
+  .rainfall-status[data-type="success"] { color: var(--positive); }
+  .rainfall-status[data-type="info"]    { color: var(--text-muted); }
+  .rainfall-results { max-height: 240px; overflow-y: auto; }
+  .rainfall-result-item { padding: 10px 12px; border: 1px solid var(--border); border-radius: 4px; margin-bottom: 6px; cursor: pointer; transition: all 0.1s; }
+  .rainfall-result-item:hover { border-color: var(--brand-primary); background: var(--section-bg); }
+  .rainfall-result-item .r-name { font-size: 13px; color: var(--text-dark); }
+  .rainfall-result-item .r-coords { font-size: 11px; color: var(--text-muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .rainfall-credit { font-size: 10px; color: var(--text-muted); margin-top: 14px; }
 </style>
 </head>
 <body>
@@ -795,6 +810,121 @@ function buildCapexBreakdownPage(c, p, results, accentColor) {
   ];
 }
 
+// ---------- v1.1 rainfall lookup (address → Open-Meteo 10yr avg) ----------
+
+function decorateRainfallInput() {
+  const el = document.getElementById('in_rainfall');
+  if (!el) return;
+  const fieldRow = el.closest('.field');
+  if (!fieldRow || fieldRow.dataset.decorated) return;
+  fieldRow.dataset.decorated = '1';
+  const helperRow = document.createElement('div');
+  helperRow.className = 'rainfall-helper';
+  helperRow.innerHTML = `<button type="button" class="rainfall-btn" title="Look up 10-year average rainfall from a location">📍 Find from address</button>`;
+  fieldRow.parentElement.insertBefore(helperRow, fieldRow.nextSibling);
+  helperRow.querySelector('button').addEventListener('click', openRainfallLookup);
+}
+
+function openRainfallLookup() {
+  if (document.getElementById('rainfall-modal-overlay')) return;
+  const overlay = document.createElement('div');
+  overlay.id = 'rainfall-modal-overlay';
+  overlay.className = 'modal-overlay active';
+  overlay.innerHTML = `
+    <div class="modal rainfall-modal">
+      <h2>Find rainfall from location</h2>
+      <p>Enter an address, town, or postcode. We'll fetch the 10-year average annual rainfall from open data.</p>
+      <div class="modal-field">
+        <label for="rfl-query">Address or town</label>
+        <input type="text" id="rfl-query" placeholder="e.g. Toowoomba QLD, or 1234 Smith Rd Dalby" autocomplete="off">
+      </div>
+      <div class="rainfall-status" id="rfl-status"></div>
+      <div class="rainfall-results" id="rfl-results"></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="rfl-cancel">Cancel</button>
+        <button class="btn btn-primary" id="rfl-search">Search</button>
+      </div>
+      <div class="rainfall-credit">Location data © OpenStreetMap contributors. Rainfall from Open-Meteo (ERA5).</div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const closeModal = () => overlay.remove();
+  document.getElementById('rfl-cancel').addEventListener('click', closeModal);
+  overlay.addEventListener('click', e => { if (e.target.id === 'rainfall-modal-overlay') closeModal(); });
+  const queryInput = document.getElementById('rfl-query');
+  queryInput.focus();
+
+  const doSearch = async () => {
+    const q = queryInput.value.trim();
+    if (!q) return;
+    rflStatus('Searching for location…', 'loading');
+    document.getElementById('rfl-results').innerHTML = '';
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&countrycodes=au&limit=5&addressdetails=1`;
+      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      const places = await res.json();
+      if (!places.length) {
+        rflStatus('No matches found. Try a different search term.', 'error');
+        return;
+      }
+      rflStatus(`${places.length} match${places.length===1?'':'es'} — pick the closest one:`, 'info');
+      const list = document.getElementById('rfl-results');
+      list.innerHTML = '';
+      for (const place of places) {
+        const item = document.createElement('div');
+        item.className = 'rainfall-result-item';
+        item.innerHTML = `<div class="r-name">${rflEscape(place.display_name)}</div><div class="r-coords">${(+place.lat).toFixed(3)}, ${(+place.lon).toFixed(3)}</div>`;
+        item.addEventListener('click', () => fetchAndApplyRainfall(place, closeModal));
+        list.appendChild(item);
+      }
+    } catch (e) {
+      rflStatus('Location search failed. Check your connection and try again.', 'error');
+    }
+  };
+
+  document.getElementById('rfl-search').addEventListener('click', doSearch);
+  queryInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+}
+
+function rflStatus(msg, type) {
+  const el = document.getElementById('rfl-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.dataset.type = type || 'info';
+}
+
+function rflEscape(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function fetchAndApplyRainfall(place, closeFn) {
+  const shortName = place.display_name.split(',').slice(0, 2).join(',');
+  rflStatus(`Fetching 10-year rainfall for ${shortName}…`, 'loading');
+  document.getElementById('rfl-results').innerHTML = '';
+  try {
+    const now = new Date();
+    const lastFullYear = now.getFullYear() - 1;
+    const startYear = lastFullYear - 9;
+    const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${place.lat}&longitude=${place.lon}&start_date=${startYear}-01-01&end_date=${lastFullYear}-12-31&daily=precipitation_sum&timezone=auto`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data || !data.daily || !data.daily.precipitation_sum) throw new Error('No precipitation data');
+    const vals = data.daily.precipitation_sum;
+    const total = vals.reduce((s, v) => s + (Number.isFinite(v) ? v : 0), 0);
+    const years = vals.length / 365.25;
+    const avgAnnual = total / years;
+    state.rainfall = Math.round(avgAnnual);
+    state._rainfallSource = { place: shortName, lat: +place.lat, lon: +place.lon, startYear, endYear: lastFullYear, avg: state.rainfall };
+    const inp = document.getElementById('in_rainfall');
+    if (inp) inp.value = state.rainfall;
+    recompute();
+    rflStatus(`✓ Set to ${state.rainfall} mm/year (avg ${startYear}–${lastFullYear})`, 'success');
+    setTimeout(closeFn, 1400);
+  } catch (e) {
+    rflStatus('Rainfall lookup failed. Try a different location.', 'error');
+  }
+}
+
 
 function computeAll(v) {
   const out = {};
@@ -916,8 +1046,10 @@ function resetDefaults() {
   seedV11Defaults();
   renderPenInputs();
   renderCapexInputs();
+  decorateRainfallInput();
   recompute();
 }
+
 
 function openModal() { document.getElementById('email-modal').classList.add('active'); }
 function closeModal() {
@@ -953,6 +1085,11 @@ async function submitWebhook(contact) {
     total_roof_m2: Math.round(state._penLayout?.totalRoofM2 ?? 0),
     capex_detailed_total: state._capex11?.total ?? 0,
     capex_detailed_payback: (state._capex11?.total > 0 && state._results?.total?.diff > 0) ? state._capex11.total / state._results.total.diff : 0,
+    rainfall_source_place: state._rainfallSource?.place ?? '',
+    rainfall_source_lat:   state._rainfallSource?.lat   ?? '',
+    rainfall_source_lon:   state._rainfallSource?.lon   ?? '',
+    rainfall_source_avg:   state._rainfallSource?.avg   ?? '',
+    rainfall_source_years: state._rainfallSource ? `${state._rainfallSource.startYear}-${state._rainfallSource.endYear}` : '',
     inputs_json: JSON.stringify(inputsClean),
   };
 
@@ -1293,7 +1430,9 @@ document.addEventListener('DOMContentLoaded', () => {
   seedV11Defaults();
   renderPenInputs();
   renderCapexInputs();
+  decorateRainfallInput();
   recompute();
+
   document.getElementById('reset-btn').addEventListener('click', resetDefaults);
   document.getElementById('pdf-btn').addEventListener('click', openModal);
   document.getElementById('modal-cancel').addEventListener('click', closeModal);
