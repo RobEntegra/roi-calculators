@@ -157,6 +157,9 @@
   .rainfall-result-item .r-name { font-size: 13px; color: var(--text-dark); }
   .rainfall-result-item .r-coords { font-size: 11px; color: var(--text-muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
   .rainfall-credit { font-size: 10px; color: var(--text-muted); margin-top: 14px; }
+  .rainfall-helper-caption { font-size: 11px; color: var(--text-muted); margin-top: 4px; line-height: 1.4; }
+  .weather-hint { font-size: 11px; color: var(--brand-gold); font-weight: 600; padding: 2px 8px; background: rgba(201, 169, 97, 0.12); border-radius: 4px; display: inline-block; margin-top: 4px; cursor: pointer; }
+  .weather-hint:hover { background: rgba(201, 169, 97, 0.22); }
 </style>
 </head>
 <body>
@@ -810,19 +813,42 @@ function buildCapexBreakdownPage(c, p, results, accentColor) {
   ];
 }
 
-// ---------- v1.1 rainfall lookup (address → Open-Meteo 10yr avg) ----------
+// ---------- v1.1 site weather lookup (address → Open-Meteo 10yr stats) ----------
+// Populates rainfall, rain days/yr, and heat events/yr from one address pick.
+const HEAT_THRESHOLD_C  = 35;   // apparent_temperature_max ≥ 35°C counts as a heat event
+const RAIN_THRESHOLD_MM = 15;   // precipitation_sum ≥ 15mm counts as a rain event
 
 function decorateRainfallInput() {
+  // Main helper sits under the rainfall field
   const el = document.getElementById('in_rainfall');
   if (!el) return;
   const fieldRow = el.closest('.field');
-  if (!fieldRow || fieldRow.dataset.decorated) return;
-  fieldRow.dataset.decorated = '1';
-  const helperRow = document.createElement('div');
-  helperRow.className = 'rainfall-helper';
-  helperRow.innerHTML = `<button type="button" class="rainfall-btn" title="Look up 10-year average rainfall from a location">📍 Find from address</button>`;
-  fieldRow.parentElement.insertBefore(helperRow, fieldRow.nextSibling);
-  helperRow.querySelector('button').addEventListener('click', openRainfallLookup);
+  if (fieldRow && !fieldRow.dataset.decorated) {
+    fieldRow.dataset.decorated = '1';
+    const helperRow = document.createElement('div');
+    helperRow.className = 'rainfall-helper';
+    helperRow.innerHTML = `
+      <button type="button" class="rainfall-btn" title="Look up 10-year averages from a location">📍 Auto-fill from site address</button>
+      <div class="rainfall-helper-caption">One address fills three fields: <strong>Annual Rainfall</strong> (below), <strong>Rain Days/Year</strong> (in Site & Specification) and <strong>Extreme Heat Events/Year</strong> (in Site & Specification).</div>
+    `;
+    fieldRow.parentElement.insertBefore(helperRow, fieldRow.nextSibling);
+    helperRow.querySelector('button').addEventListener('click', openRainfallLookup);
+  }
+
+  // Hint pills on the heat_events and rain_days fields — visually link them to the lookup
+  for (const key of ['heat_events', 'rain_days']) {
+    const inp = document.getElementById('in_' + key);
+    if (!inp) continue;
+    const row = inp.closest('.field');
+    if (!row || row.dataset.decoratedWx) continue;
+    row.dataset.decoratedWx = '1';
+    const hint = document.createElement('div');
+    hint.className = 'weather-hint';
+    hint.title = 'Click to open the address lookup — fills this field plus rainfall.';
+    hint.textContent = '📍 Auto-fill available';
+    hint.addEventListener('click', openRainfallLookup);
+    row.parentElement.insertBefore(hint, row.nextSibling);
+  }
 }
 
 function openRainfallLookup() {
@@ -832,8 +858,8 @@ function openRainfallLookup() {
   overlay.className = 'modal-overlay active';
   overlay.innerHTML = `
     <div class="modal rainfall-modal">
-      <h2>Find rainfall from location</h2>
-      <p>Enter an address, town, or postcode. We'll fetch the 10-year average annual rainfall from open data.</p>
+      <h2>Auto-fill from site location</h2>
+      <p>Enter the site address, town, or postcode. We'll fetch 10-year averages for <strong>annual rainfall</strong>, <strong>rain days</strong> (≥${RAIN_THRESHOLD_MM}mm in a day) and <strong>extreme heat events</strong> (apparent temperature ≥${HEAT_THRESHOLD_C}°C). All three calculator fields update automatically.</p>
       <div class="modal-field">
         <label for="rfl-query">Address or town</label>
         <input type="text" id="rfl-query" placeholder="e.g. Toowoomba QLD, or 1234 Smith Rd Dalby" autocomplete="off">
@@ -844,7 +870,7 @@ function openRainfallLookup() {
         <button class="btn btn-secondary" id="rfl-cancel">Cancel</button>
         <button class="btn btn-primary" id="rfl-search">Search</button>
       </div>
-      <div class="rainfall-credit">Location data © OpenStreetMap contributors. Rainfall from Open-Meteo (ERA5).</div>
+      <div class="rainfall-credit">Location data © OpenStreetMap contributors. Weather from Open-Meteo (ERA5).</div>
     </div>
   `;
   document.body.appendChild(overlay);
@@ -874,7 +900,7 @@ function openRainfallLookup() {
         const item = document.createElement('div');
         item.className = 'rainfall-result-item';
         item.innerHTML = `<div class="r-name">${rflEscape(place.display_name)}</div><div class="r-coords">${(+place.lat).toFixed(3)}, ${(+place.lon).toFixed(3)}</div>`;
-        item.addEventListener('click', () => fetchAndApplyRainfall(place, closeModal));
+        item.addEventListener('click', () => fetchAndApplyWeather(place, closeModal));
         list.appendChild(item);
       }
     } catch (e) {
@@ -889,7 +915,7 @@ function openRainfallLookup() {
 function rflStatus(msg, type) {
   const el = document.getElementById('rfl-status');
   if (!el) return;
-  el.textContent = msg;
+  el.innerHTML = msg;
   el.dataset.type = type || 'info';
 }
 
@@ -897,31 +923,55 @@ function rflEscape(s) {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-async function fetchAndApplyRainfall(place, closeFn) {
+async function fetchAndApplyWeather(place, closeFn) {
   const shortName = place.display_name.split(',').slice(0, 2).join(',');
-  rflStatus(`Fetching 10-year rainfall for ${shortName}…`, 'loading');
+  rflStatus(`Fetching 10-year weather for ${rflEscape(shortName)}…`, 'loading');
   document.getElementById('rfl-results').innerHTML = '';
   try {
     const now = new Date();
     const lastFullYear = now.getFullYear() - 1;
     const startYear = lastFullYear - 9;
-    const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${place.lat}&longitude=${place.lon}&start_date=${startYear}-01-01&end_date=${lastFullYear}-12-31&daily=precipitation_sum&timezone=auto`;
+    const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${place.lat}&longitude=${place.lon}&start_date=${startYear}-01-01&end_date=${lastFullYear}-12-31&daily=precipitation_sum,apparent_temperature_max&timezone=auto`;
     const res = await fetch(url);
     const data = await res.json();
-    if (!data || !data.daily || !data.daily.precipitation_sum) throw new Error('No precipitation data');
-    const vals = data.daily.precipitation_sum;
-    const total = vals.reduce((s, v) => s + (Number.isFinite(v) ? v : 0), 0);
-    const years = vals.length / 365.25;
-    const avgAnnual = total / years;
-    state.rainfall = Math.round(avgAnnual);
-    state._rainfallSource = { place: shortName, lat: +place.lat, lon: +place.lon, startYear, endYear: lastFullYear, avg: state.rainfall };
-    const inp = document.getElementById('in_rainfall');
-    if (inp) inp.value = state.rainfall;
+    if (!data || !data.daily) throw new Error('No daily data');
+    const precip = data.daily.precipitation_sum || [];
+    const heat   = data.daily.apparent_temperature_max || [];
+    if (!precip.length) throw new Error('No precipitation data');
+
+    let totalRain = 0, rainDaysTotal = 0, heatDaysTotal = 0;
+    for (const v of precip) {
+      if (Number.isFinite(v)) { totalRain += v; if (v >= RAIN_THRESHOLD_MM) rainDaysTotal++; }
+    }
+    for (const v of heat) {
+      if (Number.isFinite(v) && v >= HEAT_THRESHOLD_C) heatDaysTotal++;
+    }
+    const years = precip.length / 365.25;
+    const avgRain     = Math.round(totalRain / years);
+    const avgRainDays = Math.round(rainDaysTotal / years);
+    const avgHeatDays = Math.round(heatDaysTotal / years);
+
+    state.rainfall    = avgRain;
+    state.rain_days   = avgRainDays;
+    state.heat_events = avgHeatDays;
+    state._rainfallSource = { place: shortName, lat: +place.lat, lon: +place.lon, startYear, endYear: lastFullYear,
+                              avg: avgRain, rainDaysAvg: avgRainDays, heatEventsAvg: avgHeatDays };
+    for (const k of ['rainfall', 'rain_days', 'heat_events']) {
+      const inp = document.getElementById('in_' + k);
+      if (inp) inp.value = state[k];
+    }
     recompute();
-    rflStatus(`✓ Set to ${state.rainfall} mm/year (avg ${startYear}–${lastFullYear})`, 'success');
-    setTimeout(closeFn, 1400);
+
+    rflStatus(
+      `✓ <strong>${rflEscape(shortName)}</strong> (avg ${startYear}–${lastFullYear}):<br>` +
+      `&nbsp;&nbsp;Rainfall: <strong>${avgRain} mm/yr</strong> &nbsp;·&nbsp; ` +
+      `Rain days (≥${RAIN_THRESHOLD_MM}mm): <strong>${avgRainDays}/yr</strong> &nbsp;·&nbsp; ` +
+      `Heat events (≥${HEAT_THRESHOLD_C}°C): <strong>${avgHeatDays}/yr</strong>`,
+      'success'
+    );
+    setTimeout(closeFn, 2400);
   } catch (e) {
-    rflStatus('Rainfall lookup failed. Try a different location.', 'error');
+    rflStatus('Weather lookup failed. Try a different location.', 'error');
   }
 }
 
@@ -1085,11 +1135,10 @@ async function submitWebhook(contact) {
     total_roof_m2: Math.round(state._penLayout?.totalRoofM2 ?? 0),
     capex_detailed_total: state._capex11?.total ?? 0,
     capex_detailed_payback: (state._capex11?.total > 0 && state._results?.total?.diff > 0) ? state._capex11.total / state._results.total.diff : 0,
-    rainfall_source_place: state._rainfallSource?.place ?? '',
-    rainfall_source_lat:   state._rainfallSource?.lat   ?? '',
-    rainfall_source_lon:   state._rainfallSource?.lon   ?? '',
-    rainfall_source_avg:   state._rainfallSource?.avg   ?? '',
-    rainfall_source_years: state._rainfallSource ? `${state._rainfallSource.startYear}-${state._rainfallSource.endYear}` : '',
+    rainfall_source_place:     state._rainfallSource?.place         ?? '',
+    rainfall_source_avg:       state._rainfallSource?.avg           ?? '',
+    rain_days_source_avg:      state._rainfallSource?.rainDaysAvg   ?? '',
+    heat_events_source_avg:    state._rainfallSource?.heatEventsAvg ?? '',
     inputs_json: JSON.stringify(inputsClean),
   };
 
