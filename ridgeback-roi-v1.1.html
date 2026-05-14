@@ -368,15 +368,19 @@ const INPUT_CATEGORIES = [
   ]},
 ];
 // ---------- v1.1: Pen layout + CAPEX breakdown config ----------
+// "Ridgeback width" = total roof / structure width (24m, 30m or 36m).
+// Side feed: pen depth = Ridgeback width.
+// Centre feed: pen depth = (Ridgeback width − centre lane) / 2; only valid on 36m.
 const PEN_LAYOUT_DEFAULTS = {
-  pen_width: 30,
+  rb_width: 30,
   pen_length: 60,
   feed_config: 'side',
-  canopy: 4,
+  canopy: 4,           // lean-to overhang width in metres
   overhang: 'one',
   coverage: 100,
 };
-const PEN_WIDTH_OPTIONS = [24, 30, 36];
+const RB_WIDTH_OPTIONS = [24, 30, 36];
+const CENTRE_LANE_M = 6;
 
 const CAPEX_CATEGORIES = [
   { key: 'cap_permits',     label: 'Permits & Approvals',                       default: 50000   },
@@ -390,45 +394,51 @@ const CAPEX_CATEGORIES = [
   { key: 'cap_contingency', label: 'Contingency',                               default: 150000  },
 ];
 
-function resolveOverhang(pen_width, overhang) {
-  if (overhang === 'both' && +pen_width === 36) return 'one';
+function resolveOverhang(rb_width, overhang) {
+  if (overhang === 'both' && +rb_width === 36) return 'one'; // 36m → max one lean-to
   return overhang || 'none';
 }
 function overhangCount(o) { return o === 'none' ? 0 : o === 'one' ? 1 : 2; }
 
 function computePenLayout(v) {
-  const width    = +v.pen_width  || 30;
-  const length   = +v.pen_length || 60;
-  const density  = +v.density_ridge || 9;
-  const cov      = (+v.coverage || 100) / 100;
-  const sides    = v.feed_config === 'centre' ? 2 : 1;
-  const canopy   = +v.canopy || 4;
-  const overhang = resolveOverhang(width, v.overhang);
+  let rb_width = +v.rb_width || 30;
+  const length = +v.pen_length || 60;
+  const density = +v.density_ridge || 9;
+  const cov = (+v.coverage || 100) / 100;
+  const canopy = +v.canopy || 4;
+
+  // Centre feed only on 36m — if user selected centre with a smaller width, auto-promote
+  let feed_config = v.feed_config || 'side';
+  if (feed_config === 'centre' && rb_width !== 36) rb_width = 36;
+
+  const overhang = resolveOverhang(rb_width, v.overhang);
   const ohCount  = overhangCount(overhang);
   const overhangM = ohCount * canopy;
 
-  const penArea     = width * length;
-  const scuPerPen   = density > 0 ? penArea / density : 0;
-  const scuRequired = (+v.scu || 0) * cov;
-  const penQty      = scuPerPen > 0 ? Math.ceil(scuRequired / scuPerPen) : 0;
-  const bunkLM      = length * penQty * sides;
+  const isCentre = feed_config === 'centre';
+  const lane_m = isCentre ? CENTRE_LANE_M : 0;
+  const pen_depth = isCentre ? (rb_width - lane_m) / 2 : rb_width;
 
-  const isCentre = v.feed_config === 'centre';
-  const lane_m   = isCentre ? 6 : 0;
-  const topRow   = isCentre ? Math.ceil(penQty / 2) : penQty;
-  const botRow   = isCentre ? Math.floor(penQty / 2) : 0;
+  const penArea = pen_depth * length;
+  const scuPerPen = density > 0 ? penArea / density : 0;
+  const scuRequired = (+v.scu || 0) * cov;
+  const penQty = scuPerPen > 0 ? Math.ceil(scuRequired / scuPerPen) : 0;
+  const bunkLM = length * penQty; // each pen has one bunk along its length (lane-side or canopy-side)
+
+  const topRow = isCentre ? Math.ceil(penQty / 2) : penQty;
+  const botRow = isCentre ? Math.floor(penQty / 2) : 0;
   const pensPerRow = Math.max(topRow, botRow);
-  const buildingLen   = pensPerRow * length;
-  const buildingWidth = isCentre ? (2 * width + lane_m + overhangM) : (width + overhangM);
-  const totalRoofM2   = buildingLen * buildingWidth;
+  const buildingLen = pensPerRow * length;
+  const buildingWidth = rb_width + overhangM;
+  const totalRoofM2 = buildingLen * buildingWidth;
 
   const hasHospital = isCentre && (penQty % 2 === 1);
   const hospitalCol = hasHospital ? botRow : -1;
 
   return {
-    width, length, density, coverage: cov*100, feed_config: v.feed_config,
+    rb_width, length, density, coverage: cov*100, feed_config,
     canopy, overhang, ohCount, overhangM,
-    sides, lane_m, topRow, botRow, pensPerRow, buildingLen, buildingWidth,
+    pen_depth, lane_m, topRow, botRow, pensPerRow, buildingLen, buildingWidth,
     penArea, scuPerPen, scuRequired, penQty, bunkLM, totalRoofM2,
     hasHospital, hospitalCol,
   };
@@ -451,52 +461,71 @@ function renderPenInputs() {
   if (!root) return;
   root.innerHTML = '';
 
+  const centreDisabled = +state.rb_width !== 36;
+  if (centreDisabled && state.feed_config === 'centre') state.feed_config = 'side';
+
+  // 1. Ridgeback width
   const f1 = document.createElement('div'); f1.className = 'field';
-  f1.innerHTML = `<label>Pen Width<span class="info">Standard Ridgeback widths</span></label>
-    <select id="pen_width" class="field-select">
-      ${PEN_WIDTH_OPTIONS.map(w => `<option value="${w}" ${w===state.pen_width?'selected':''}>${w} m</option>`).join('')}
+  f1.innerHTML = `<label>Ridgeback Width<span class="info">Total structure / roof span</span></label>
+    <select id="rb_width" class="field-select">
+      ${RB_WIDTH_OPTIONS.map(w => `<option value="${w}" ${w===state.rb_width?'selected':''}>${w} m</option>`).join('')}
     </select><span class="units">m</span>`;
   root.appendChild(f1);
 
+  // 2. Pen length
   const f2 = document.createElement('div'); f2.className = 'field';
   f2.innerHTML = `<label>Pen Length<span class="info">Long axis of pen</span></label>
     <input type="number" step="any" id="pen_length" value="${state.pen_length}"><span class="units">m</span>`;
   root.appendChild(f2);
 
+  // 3. Feed config (Centre disabled unless 36m)
   const f3 = document.createElement('div'); f3.className = 'field';
-  f3.innerHTML = `<label>Feed Lane Configuration<span class="info">Side = bunk one side. Centre = lane between two pens.</span></label>
+  f3.innerHTML = `<label>Feed Lane Configuration<span class="info">Side = bunk one side. Centre = lane between two pens (36m only).</span></label>
     <div class="field-radio-group">
       <label><input type="radio" name="feed_config" value="side" ${state.feed_config==='side'?'checked':''}> Side</label>
-      <label><input type="radio" name="feed_config" value="centre" ${state.feed_config==='centre'?'checked':''}> Centre</label>
+      <label title="${centreDisabled?'Centre feed requires 36m Ridgeback width':''}" style="${centreDisabled?'opacity:0.45;cursor:not-allowed':''}"><input type="radio" name="feed_config" value="centre" ${state.feed_config==='centre'?'checked':''} ${centreDisabled?'disabled':''}> Centre</label>
     </div>`;
   root.appendChild(f3);
 
-  const bothDisabled = +state.pen_width === 36;
+  // 4. Overhang (Both disabled on 36m)
+  const bothDisabled = +state.rb_width === 36;
   if (bothDisabled && state.overhang === 'both') state.overhang = 'one';
   const f5 = document.createElement('div'); f5.className = 'field';
-  f5.innerHTML = `<label>Roof Overhang<span class="info">4m roof extension. 36m pens: max one side.</span></label>
+  f5.innerHTML = `<label>Lean-to Overhang<span class="info">4m roof extension for feed protection. 36m: one side max.</span></label>
     <div class="field-radio-group">
       <label><input type="radio" name="overhang" value="none" ${state.overhang==='none'?'checked':''}> None</label>
       <label><input type="radio" name="overhang" value="one"  ${state.overhang==='one'?'checked':''}> One side</label>
-      <label title="${bothDisabled?'Not available on 36m pens':''}" style="${bothDisabled?'opacity:0.45;cursor:not-allowed':''}"><input type="radio" name="overhang" value="both" ${state.overhang==='both'?'checked':''} ${bothDisabled?'disabled':''}> Both sides</label>
+      <label title="${bothDisabled?'Not available on 36m Ridgebacks':''}" style="${bothDisabled?'opacity:0.45;cursor:not-allowed':''}"><input type="radio" name="overhang" value="both" ${state.overhang==='both'?'checked':''} ${bothDisabled?'disabled':''}> Both sides</label>
     </div>`;
   root.appendChild(f5);
 
+  // 5. Coverage
   const f4 = document.createElement('div'); f4.className = 'field';
   f4.innerHTML = `<label>Coverage<span class="info">% of total SCU housed under cover</span></label>
     <input type="number" step="any" min="0" max="100" id="coverage" value="${state.coverage}"><span class="units">%</span>`;
   root.appendChild(f4);
 
-  document.getElementById('pen_width').addEventListener('change', e => {
-    state.pen_width = +e.target.value;
-    if (state.pen_width === 36 && state.overhang === 'both') state.overhang = 'one';
+  // Wire events
+  document.getElementById('rb_width').addEventListener('change', e => {
+    state.rb_width = +e.target.value;
+    if (state.rb_width !== 36 && state.feed_config === 'centre') state.feed_config = 'side';
+    if (state.rb_width === 36 && state.overhang === 'both') state.overhang = 'one';
     renderPenInputs();
     recompute();
   });
   document.getElementById('pen_length').addEventListener('input', e => { state.pen_length = +e.target.value || 0; recompute(); });
   document.getElementById('coverage').addEventListener('input', e => { state.coverage = +e.target.value || 0; recompute(); });
   document.querySelectorAll('input[name="feed_config"]').forEach(r => {
-    r.addEventListener('change', e => { state.feed_config = e.target.value; recompute(); });
+    r.addEventListener('change', e => {
+      state.feed_config = e.target.value;
+      // Centre auto-promotes to 36m
+      if (state.feed_config === 'centre' && state.rb_width !== 36) {
+        state.rb_width = 36;
+        if (state.overhang === 'both') state.overhang = 'one';
+        renderPenInputs();
+      }
+      recompute();
+    });
   });
   document.querySelectorAll('input[name="overhang"]').forEach(r => {
     r.addEventListener('change', e => { state.overhang = e.target.value; recompute(); });
@@ -532,12 +561,16 @@ function renderCapexInputs() {
 function renderPenLayout(p) {
   const sum = document.getElementById('pen-summary');
   if (!sum) return;
-  const ohLabel = p.overhang === 'none' ? 'no overhang' : p.overhang === 'one' ? '4m one side' : '4m both sides';
+  const ohLabel = p.overhang === 'none' ? 'no lean-to' : p.overhang === 'one' ? '4m lean-to (one side)' : '4m lean-to (both sides)';
+  const isCentre = p.feed_config === 'centre';
+  const penDepthLabel = isCentre
+    ? `${p.pen_depth}m deep (½ of ${p.rb_width}m minus ${p.lane_m}m lane)`
+    : `${p.pen_depth}m deep × ${p.length}m long`;
   sum.innerHTML = `
-    <div class="item"><div class="label">SCU per pen</div><div class="val">${Math.round(p.scuPerPen).toLocaleString('en-AU')}</div><div class="sub">${p.penArea.toLocaleString('en-AU')} m² @ ${p.density} m²/SCU</div></div>
+    <div class="item"><div class="label">Ridgeback structure</div><div class="val">${p.rb_width}m × ${p.buildingLen}m</div><div class="sub">${ohLabel}</div></div>
+    <div class="item"><div class="label">Pen size & SCU/pen</div><div class="val">${Math.round(p.scuPerPen).toLocaleString('en-AU')} SCU/pen</div><div class="sub">${penDepthLabel}</div></div>
     <div class="item"><div class="label">Pen quantity</div><div class="val">${p.penQty}${p.hasHospital ? ' + 1 spare' : ''}</div><div class="sub">covers ${Math.round(p.scuRequired).toLocaleString('en-AU')} SCU (${p.coverage}%)</div></div>
-    <div class="item"><div class="label">Bunk length</div><div class="val">${p.bunkLM.toLocaleString('en-AU')} m</div><div class="sub">${p.sides === 2 ? 'Two-sided (centre feed)' : 'One-sided (side feed)'}</div></div>
-    <div class="item"><div class="label">Total roof area</div><div class="val">${Math.round(p.totalRoofM2).toLocaleString('en-AU')} m²</div><div class="sub">${p.buildingLen}m × ${p.buildingWidth}m, ${ohLabel}</div></div>
+    <div class="item"><div class="label">Bunk length & roof area</div><div class="val">${p.bunkLM.toLocaleString('en-AU')} m bunk</div><div class="sub">${Math.round(p.totalRoofM2).toLocaleString('en-AU')} m² roof total</div></div>
   `;
   document.getElementById('pen-svg-wrap').innerHTML = renderPenSchematic(p);
 }
@@ -549,6 +582,7 @@ function renderPenSchematic(p) {
   const lane_m   = p.lane_m;
   const topRow   = p.topRow;
   const botRow   = p.botRow;
+  const penDepth = p.pen_depth;
 
   const overhang = p.overhang;
   const ohOne    = overhang === 'one' || overhang === 'both';
@@ -557,7 +591,7 @@ function renderPenSchematic(p) {
   const topOH    = ohBoth;
   const botOH    = ohOne;
 
-  const penTopY  = topOH ? ohW : 0;
+  const penTopY = topOH ? ohW : 0;
   const buildingLen   = p.buildingLen;
   const buildingWidth = p.buildingWidth;
 
@@ -589,7 +623,7 @@ function renderPenSchematic(p) {
       const px = X(i * p.length);
       const py = Y(yTopMetres);
       const pw = M(p.length);
-      const ph = M(p.width);
+      const ph = M(penDepth);
       out += `<rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="${penFill}" stroke="${penStrk}" stroke-width="0.8"/>`;
       if (pw > 18) {
         out += `<text x="${px + pw/2}" y="${py + ph/2}" text-anchor="middle" dominant-baseline="middle" font-size="${Math.max(8, Math.min(13, pw/6))}" fill="#6B7280" font-family="Segoe UI, sans-serif">${startNum + i}</text>`;
@@ -602,7 +636,7 @@ function renderPenSchematic(p) {
     const px = X(colIdx * p.length);
     const py = Y(yTopMetres);
     const pw = M(p.length);
-    const ph = M(p.width);
+    const ph = M(penDepth);
     let out = `<rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="${hospFill}" stroke="${hospStrk}" stroke-width="1.2" stroke-dasharray="4,3"/>`;
     const fontSize = Math.max(7, Math.min(11, pw/9));
     out += `<text x="${px + pw/2}" y="${py + ph/2}" text-anchor="middle" dominant-baseline="middle" font-size="${fontSize}" font-weight="700" fill="${hospStrk}" font-family="Segoe UI, sans-serif">POSSIBLE</text>`;
@@ -610,22 +644,24 @@ function renderPenSchematic(p) {
     return out;
   };
 
+  // Top lean-to strip (if both-sides)
   if (topOH) {
     svg += `<rect x="${X(0)}" y="${Y(0)}" width="${M(buildingLen)}" height="${M(ohW)}" fill="${canopyFill}" fill-opacity="0.55" stroke="${canopyFill}" stroke-width="0.8"/>`;
   }
 
   if (isSide) {
+    // Single row of pens spanning the Ridgeback width
     svg += drawPenRow(penTopY, p.penQty, 1);
-    const bunkY = penTopY + p.width;
+    const bunkY = penTopY + penDepth;
     svg += `<line x1="${X(0)}" y1="${Y(bunkY)}" x2="${X(buildingLen)}" y2="${Y(bunkY)}" stroke="${bunkCol}" stroke-width="2.6"/>`;
     if (botOH) {
       svg += `<rect x="${X(0)}" y="${Y(bunkY)}" width="${M(buildingLen)}" height="${M(ohW)}" fill="${canopyFill}" fill-opacity="0.55" stroke="${canopyFill}" stroke-width="0.8"/>`;
     }
   } else {
+    // Centre feed: pens above lane + lane + pens below lane, all WITHIN the Ridgeback width
     const yTopRow = penTopY;
-    const yLane   = yTopRow + p.width;
+    const yLane   = yTopRow + penDepth;
     const yBotRow = yLane + lane_m;
-
     svg += drawPenRow(yTopRow, topRow, 1);
     svg += `<line x1="${X(0)}" y1="${Y(yLane)}" x2="${X(topRow * p.length)}" y2="${Y(yLane)}" stroke="${bunkCol}" stroke-width="2.6"/>`;
     svg += `<rect x="${X(0)}" y="${Y(yLane)}" width="${M(buildingLen)}" height="${M(lane_m)}" fill="${laneFill}" fill-opacity="0.55" stroke="${laneFill}" stroke-width="0.8"/>`;
@@ -636,7 +672,7 @@ function renderPenSchematic(p) {
       svg += drawHospital(yBotRow, p.hospitalCol);
     }
     if (botOH) {
-      svg += `<rect x="${X(0)}" y="${Y(yBotRow + p.width)}" width="${M(buildingLen)}" height="${M(ohW)}" fill="${canopyFill}" fill-opacity="0.55" stroke="${canopyFill}" stroke-width="0.8"/>`;
+      svg += `<rect x="${X(0)}" y="${Y(yBotRow + penDepth)}" width="${M(buildingLen)}" height="${M(ohW)}" fill="${canopyFill}" fill-opacity="0.55" stroke="${canopyFill}" stroke-width="0.8"/>`;
     }
   }
 
@@ -647,22 +683,20 @@ function renderPenSchematic(p) {
     </g>
   `;
 
-  const ohLabel = overhang === 'none'
-    ? 'no overhang'
-    : overhang === 'one'
-      ? `${ohW}m overhang one side`
-      : `${ohW}m overhangs both sides`;
+  const ohLabel = overhang === 'none' ? 'no lean-to'
+                : overhang === 'one'  ? `${ohW}m lean-to (one side)`
+                                       : `${ohW}m lean-to (both sides)`;
   const legendY = h + 22;
   let legend = `
     <g font-size="10" font-family="Segoe UI, sans-serif" fill="#6B7280">
       <rect x="0" y="${legendY}" width="14" height="10" fill="${penFill}" stroke="${penStrk}"/>
-      <text x="20" y="${legendY + 8}">Pen (${p.width}m × ${p.length}m)</text>
+      <text x="20" y="${legendY + 8}">Pen (${penDepth}m × ${p.length}m)</text>
       <line x1="160" y1="${legendY + 5}" x2="180" y2="${legendY + 5}" stroke="${bunkCol}" stroke-width="2.6"/>
       <text x="186" y="${legendY + 8}">Bunk</text>
       ${(ohOne || !isSide) ? `<rect x="240" y="${legendY}" width="14" height="10" fill="${canopyFill}" fill-opacity="0.55" stroke="${canopyFill}"/>
-        <text x="260" y="${legendY + 8}">${isSide ? ohLabel : `${lane_m}m centre lane / ${ohLabel}`}</text>` : `<text x="240" y="${legendY + 8}">${ohLabel}</text>`}
-      <rect x="${(ohOne || !isSide) ? 470 : 380}" y="${legendY}" width="14" height="10" fill="${roofFill}" stroke="${roofStrk}" stroke-width="1.5"/>
-      <text x="${(ohOne || !isSide) ? 490 : 400}" y="${legendY + 8}">One continuous roof</text>
+        <text x="260" y="${legendY + 8}">${isSide ? ohLabel : `${lane_m}m centre lane${ohOne ? ' / ' + ohLabel : ''}`}</text>` : `<text x="240" y="${legendY + 8}">${ohLabel}</text>`}
+      <rect x="${(ohOne || !isSide) ? 480 : 380}" y="${legendY}" width="14" height="10" fill="${roofFill}" stroke="${roofStrk}" stroke-width="1.5"/>
+      <text x="${(ohOne || !isSide) ? 500 : 400}" y="${legendY + 8}">Ridgeback roof (${p.rb_width}m)</text>
       ${p.hasHospital ? `<rect x="0" y="${legendY + 16}" width="14" height="10" fill="${hospFill}" stroke="${hospStrk}" stroke-dasharray="3,2"/>
         <text x="20" y="${legendY + 24}">Spare slot — possible hospital pen</text>` : ''}
     </g>
@@ -695,8 +729,8 @@ function renderCapexBreakdown(c, results) {
 
 function buildPenLayoutPage(p, accentColor) {
   if (!p) return [];
-  const fc = p.feed_config === 'centre' ? 'Centre feed lane (bunks both sides)' : 'Side feed (bunk one side)';
-  const ohText = p.overhang === 'none' ? 'No overhang' : p.overhang === 'one' ? '4m overhang (one side)' : '4m overhangs (both sides)';
+  const fc = p.feed_config === 'centre' ? `Centre feed lane (${p.lane_m}m, bunks both sides)` : 'Side feed (bunk one side)';
+  const ohText = p.overhang === 'none' ? 'No lean-to' : p.overhang === 'one' ? '4m lean-to (one side)' : '4m lean-to (both sides)';
   return [
     { text: 'Pen Layout & Schematic', fontSize: 22, bold: true, color: '#1F2937', margin: [0, 0, 0, 6] },
     { text: 'Configuration of the covered pen footprint based on operation size, density and coverage.', fontSize: 10, color: '#6B7280', margin: [0, 0, 0, 16] },
@@ -705,14 +739,14 @@ function buildPenLayoutPage(p, accentColor) {
         widths: ['*', '*', '*', '*'],
         body: [[
           { stack: [
-            { text: 'PEN DIMENSIONS', fontSize: 8, color: '#9CA3AF', bold: true, characterSpacing: 1 },
-            { text: `${p.width}m × ${p.length}m`, fontSize: 14, bold: true, color: accentColor, margin: [0, 4, 0, 0] },
-            { text: `${p.penArea.toLocaleString('en-AU')} m² floor`, fontSize: 9, color: '#9CA3AF', margin: [0, 2, 0, 0] }
+            { text: 'RIDGEBACK STRUCTURE', fontSize: 8, color: '#9CA3AF', bold: true, characterSpacing: 1 },
+            { text: `${p.rb_width}m × ${p.buildingLen}m`, fontSize: 14, bold: true, color: accentColor, margin: [0, 4, 0, 0] },
+            { text: ohText.toLowerCase(), fontSize: 9, color: '#9CA3AF', margin: [0, 2, 0, 0] }
           ], margin: [10, 12, 10, 12], fillColor: '#F9FAFB' },
           { stack: [
             { text: 'SCU PER PEN', fontSize: 8, color: '#9CA3AF', bold: true, characterSpacing: 1 },
             { text: Math.round(p.scuPerPen).toLocaleString('en-AU'), fontSize: 14, bold: true, color: '#1F2937', margin: [0, 4, 0, 0] },
-            { text: `@ ${p.density} m²/SCU`, fontSize: 9, color: '#9CA3AF', margin: [0, 2, 0, 0] }
+            { text: `${p.pen_depth}m × ${p.length}m @ ${p.density} m²/SCU`, fontSize: 9, color: '#9CA3AF', margin: [0, 2, 0, 0] }
           ], margin: [10, 12, 10, 12], fillColor: '#F9FAFB' },
           { stack: [
             { text: 'PEN QUANTITY', fontSize: 8, color: '#9CA3AF', bold: true, characterSpacing: 1 },
@@ -733,10 +767,11 @@ function buildPenLayoutPage(p, accentColor) {
       table: {
         widths: ['*', 'auto'],
         body: [
-          [{ text: 'Pen width', fontSize: 10, color: '#6B7280' }, { text: `${p.width} m`, fontSize: 10, alignment: 'right', bold: true }],
+          [{ text: 'Ridgeback width', fontSize: 10, color: '#6B7280' }, { text: `${p.rb_width} m`, fontSize: 10, alignment: 'right', bold: true }],
           [{ text: 'Pen length', fontSize: 10, color: '#6B7280' }, { text: `${p.length} m`, fontSize: 10, alignment: 'right', bold: true }],
+          [{ text: 'Pen depth (derived)', fontSize: 10, color: '#6B7280' }, { text: `${p.pen_depth} m`, fontSize: 10, alignment: 'right', bold: true }],
           [{ text: 'Feed lane configuration', fontSize: 10, color: '#6B7280' }, { text: fc, fontSize: 10, alignment: 'right', bold: true }],
-          [{ text: 'Roof overhang', fontSize: 10, color: '#6B7280' }, { text: ohText, fontSize: 10, alignment: 'right', bold: true }],
+          [{ text: 'Lean-to overhang', fontSize: 10, color: '#6B7280' }, { text: ohText, fontSize: 10, alignment: 'right', bold: true }],
           [{ text: 'Coverage of total SCU', fontSize: 10, color: '#6B7280' }, { text: `${p.coverage}%`, fontSize: 10, alignment: 'right', bold: true }],
           [{ text: 'Total bunk length', fontSize: 10, color: '#6B7280' }, { text: `${p.bunkLM.toLocaleString('en-AU')} m`, fontSize: 10, alignment: 'right', bold: true }],
           ...(p.hasHospital ? [[{ text: 'Spare slot', fontSize: 10, color: '#6B7280' }, { text: 'Possible hospital pen (odd pen count)', fontSize: 10, alignment: 'right', bold: true, color: '#92400E' }]] : []),
@@ -746,7 +781,7 @@ function buildPenLayoutPage(p, accentColor) {
     },
     { text: 'Schematic', fontSize: 13, bold: true, color: '#1F2937', margin: [0, 22, 0, 8] },
     { svg: renderPenSchematic(p), width: 480, alignment: 'center' },
-    { text: `Top-down view. ${p.penQty} pen${p.penQty === 1 ? '' : 's'} of ${p.width}m × ${p.length}m under one continuous roof, drawn to relative scale.`, fontSize: 9, color: '#9CA3AF', alignment: 'center', margin: [0, 6, 0, 0] },
+    { text: `Top-down view. ${p.penQty} pen${p.penQty === 1 ? '' : 's'} of ${p.pen_depth}m × ${p.length}m under one continuous ${p.rb_width}m Ridgeback roof, drawn to relative scale.`, fontSize: 9, color: '#9CA3AF', alignment: 'center', margin: [0, 6, 0, 0] },
     { text: '', pageBreak: 'after' },
   ];
 }
@@ -815,11 +850,10 @@ function buildCapexBreakdownPage(c, p, results, accentColor) {
 
 // ---------- v1.1 site weather lookup (address → Open-Meteo 10yr stats) ----------
 // Populates rainfall, rain days/yr, and heat events/yr from one address pick.
-const HEAT_THRESHOLD_C  = 35;   // apparent_temperature_max ≥ 35°C counts as a heat event
+const HEAT_THRESHOLD_C  = 40;   // apparent_temperature_max ≥ 40°C counts as a heat event
 const RAIN_THRESHOLD_MM = 15;   // precipitation_sum ≥ 15mm counts as a rain event
 
 function decorateRainfallInput() {
-  // Main helper sits under the rainfall field
   const el = document.getElementById('in_rainfall');
   if (!el) return;
   const fieldRow = el.closest('.field');
@@ -829,14 +863,21 @@ function decorateRainfallInput() {
     helperRow.className = 'rainfall-helper';
     helperRow.innerHTML = `
       <button type="button" class="rainfall-btn" title="Look up 10-year averages from a location">📍 Auto-fill from site address</button>
-      <div class="rainfall-helper-caption">One address fills three fields: <strong>Annual Rainfall</strong> (below), <strong>Rain Days/Year</strong> (in Site & Specification) and <strong>Extreme Heat Events/Year</strong> (in Site & Specification).</div>
+      <div class="rainfall-helper-caption">
+        One address fills three fields: <strong>Annual Rainfall</strong> (below), <strong>Rain Days/Year</strong> (in Site &amp; Specification) and <strong>Extreme Heat Events/Year</strong> (in Site &amp; Specification).<br>
+        <em>Heat event</em> = day with apparent temperature <strong>≥ ${HEAT_THRESHOLD_C}°C</strong>. <em>Rain event</em> = day with <strong>&gt; ${RAIN_THRESHOLD_MM}mm</strong> rain. Averaged over the last 10 years.
+      </div>
     `;
     fieldRow.parentElement.insertBefore(helperRow, fieldRow.nextSibling);
     helperRow.querySelector('button').addEventListener('click', openRainfallLookup);
   }
 
-  // Hint pills on the heat_events and rain_days fields — visually link them to the lookup
-  for (const key of ['heat_events', 'rain_days']) {
+  // Hint pills on the heat_events and rain_days fields with thresholds shown
+  const hints = {
+    heat_events: `📍 Auto-fill available — counted as days ≥ ${HEAT_THRESHOLD_C}°C apparent`,
+    rain_days:   `📍 Auto-fill available — counted as days &gt; ${RAIN_THRESHOLD_MM}mm rain`,
+  };
+  for (const key of Object.keys(hints)) {
     const inp = document.getElementById('in_' + key);
     if (!inp) continue;
     const row = inp.closest('.field');
@@ -845,7 +886,7 @@ function decorateRainfallInput() {
     const hint = document.createElement('div');
     hint.className = 'weather-hint';
     hint.title = 'Click to open the address lookup — fills this field plus rainfall.';
-    hint.textContent = '📍 Auto-fill available';
+    hint.innerHTML = hints[key];
     hint.addEventListener('click', openRainfallLookup);
     row.parentElement.insertBefore(hint, row.nextSibling);
   }
@@ -859,7 +900,12 @@ function openRainfallLookup() {
   overlay.innerHTML = `
     <div class="modal rainfall-modal">
       <h2>Auto-fill from site location</h2>
-      <p>Enter the site address, town, or postcode. We'll fetch 10-year averages for <strong>annual rainfall</strong>, <strong>rain days</strong> (≥${RAIN_THRESHOLD_MM}mm in a day) and <strong>extreme heat events</strong> (apparent temperature ≥${HEAT_THRESHOLD_C}°C). All three calculator fields update automatically.</p>
+      <p>Enter the site address, town, or postcode. We'll fetch 10-year averages from open data:</p>
+      <ul style="margin: 0 0 14px 18px; font-size: 13px; color: var(--text-muted); line-height: 1.6;">
+        <li><strong>Annual rainfall</strong> (mm/year)</li>
+        <li><strong>Rain days</strong> — days with &gt; ${RAIN_THRESHOLD_MM}mm of rain</li>
+        <li><strong>Extreme heat events</strong> — days with apparent temperature ≥ ${HEAT_THRESHOLD_C}°C</li>
+      </ul>
       <div class="modal-field">
         <label for="rfl-query">Address or town</label>
         <input type="text" id="rfl-query" placeholder="e.g. Toowoomba QLD, or 1234 Smith Rd Dalby" autocomplete="off">
@@ -941,7 +987,7 @@ async function fetchAndApplyWeather(place, closeFn) {
 
     let totalRain = 0, rainDaysTotal = 0, heatDaysTotal = 0;
     for (const v of precip) {
-      if (Number.isFinite(v)) { totalRain += v; if (v >= RAIN_THRESHOLD_MM) rainDaysTotal++; }
+      if (Number.isFinite(v)) { totalRain += v; if (v > RAIN_THRESHOLD_MM) rainDaysTotal++; }
     }
     for (const v of heat) {
       if (Number.isFinite(v) && v >= HEAT_THRESHOLD_C) heatDaysTotal++;
@@ -965,7 +1011,7 @@ async function fetchAndApplyWeather(place, closeFn) {
     rflStatus(
       `✓ <strong>${rflEscape(shortName)}</strong> (avg ${startYear}–${lastFullYear}):<br>` +
       `&nbsp;&nbsp;Rainfall: <strong>${avgRain} mm/yr</strong> &nbsp;·&nbsp; ` +
-      `Rain days (≥${RAIN_THRESHOLD_MM}mm): <strong>${avgRainDays}/yr</strong> &nbsp;·&nbsp; ` +
+      `Rain days (&gt;${RAIN_THRESHOLD_MM}mm): <strong>${avgRainDays}/yr</strong> &nbsp;·&nbsp; ` +
       `Heat events (≥${HEAT_THRESHOLD_C}°C): <strong>${avgHeatDays}/yr</strong>`,
       'success'
     );
@@ -1123,8 +1169,9 @@ async function submitWebhook(contact) {
     capex_high: state._results?.capex?.high ?? 0,
     payback_low: state._results?.payback?.low ?? 0,
     payback_high: state._results?.payback?.high ?? 0,
-    pen_width: state.pen_width,
+    rb_width: state.rb_width,
     pen_length: state.pen_length,
+    pen_depth: state._penLayout?.pen_depth ?? 0,
     feed_config: state.feed_config,
     overhang: state.overhang,
     coverage_pct: state.coverage,
@@ -1135,10 +1182,10 @@ async function submitWebhook(contact) {
     total_roof_m2: Math.round(state._penLayout?.totalRoofM2 ?? 0),
     capex_detailed_total: state._capex11?.total ?? 0,
     capex_detailed_payback: (state._capex11?.total > 0 && state._results?.total?.diff > 0) ? state._capex11.total / state._results.total.diff : 0,
-    rainfall_source_place:     state._rainfallSource?.place         ?? '',
-    rainfall_source_avg:       state._rainfallSource?.avg           ?? '',
-    rain_days_source_avg:      state._rainfallSource?.rainDaysAvg   ?? '',
-    heat_events_source_avg:    state._rainfallSource?.heatEventsAvg ?? '',
+    rainfall_source_place: state._rainfallSource?.place         ?? '',
+    rainfall_source_avg:   state._rainfallSource?.avg           ?? '',
+    rain_days_source_avg:  state._rainfallSource?.rainDaysAvg   ?? '',
+    heat_events_source_avg:state._rainfallSource?.heatEventsAvg ?? '',
     inputs_json: JSON.stringify(inputsClean),
   };
 
